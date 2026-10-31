@@ -186,9 +186,9 @@ def test_1h_point_is_the_same_slot_as_its_bar_cell(database):
     from app.timeutil import iso_utc
 
     now = now_ts()
-    slot = (now // 300) * 300 - 300
+    slot = (now // 60) * 60 - 60
     server = make_server("Hour", port=20222)
-    for offset, latency in ((0, 80), (60, 80), (120, 400)):
+    for offset, latency in ((0, 80), (15, 80), (30, 400)):
         Check.create(server=server, checked_at=slot + offset, status="ok", latency_ms=latency)
     history = StatsService(LiveRegistry(), lambda sid: False).server_history(server.id, "1h")
     assert [item["t"] for item in history["points"]] == [cell["start"] for cell in history["bars"]]
@@ -205,7 +205,7 @@ def test_history_payload(database):
     Incident.create(server=server, started_at=now - 2000, ended_at=now - 1000, duration_seconds=1000)
     live = LiveRegistry()
     stats = StatsService(live, lambda sid: False)
-    for key, points, bars in (("1h", 12, 12), ("24h", 288, 48), ("7d", 168, 42), ("30d", 120, 30)):
+    for key, points, bars in (("1h", 60, 60), ("24h", 288, 48), ("7d", 168, 42), ("30d", 120, 30)):
         history = stats.server_history(server.id, key)
         assert len(history["points"]) == points
         assert len(history["bars"]) == bars

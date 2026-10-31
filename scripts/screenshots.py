@@ -397,7 +397,7 @@ def check_open_card(browser, panel: Panel, failures: list[str]) -> None:
     settle(page)
     card = open_card(page, panel.ids["Amsterdam WS 🇳🇱"])
     day = card.evaluate(OPEN_STATE)
-    if not (day["open"] and day["closedBarHidden"] and day["range"] == "1h" and day["cells"] == 12):
+    if not (day["open"] and day["closedBarHidden"] and day["range"] == "1h" and day["cells"] == 60):
         failures.append(f"open card (1h): {day}")
     if max(abs(e) for e in day["edges"]) > 1:
         failures.append(f"bar and chart edges differ by {day['edges']}")

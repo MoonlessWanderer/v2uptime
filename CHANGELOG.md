@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- An open card starts on 1h. Each 1h chart point is the same 5-minute cell as the status bar under it, and its ping is the median of that cell. 24h, 7d, and 30d stay on the same control.
+- An open card starts on 1h. The chart and the status bar are the same 60 one-minute cells, and each point's ping is the median of that minute. 24h, 7d, and 30d stay on the same control.
 - A 24h chart point is the median ping of that 5-minute slot. The open-card tooltip shows that point, not the average of the wider status-bar cell.
 - A closed card shows the last 60 checks, one cell each, labelled 1h. Online, Degraded, and Down no longer include the uptime percent on that line. The open card and its 24h/7d/30d bars are unchanged.
 - An update no longer crash-loops when `servers.subscription_id` still references a `subscriptions` table that is already gone. The column is removed by rebuilding `servers`, and the servers and their history stay.

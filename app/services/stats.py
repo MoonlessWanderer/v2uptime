@@ -64,9 +64,9 @@ RANGES: dict[str, int] = {"24h": DAY, "7d": 7 * DAY, "30d": 30 * DAY}
 HISTORY_RANGES: dict[str, int] = {"1h": HOUR, **RANGES}
 RANGE_LABELS = {"1h": "1h", "24h": "24h", "7d": "7d", "30d": "30d"}
 BAR_SPEC: dict[str, tuple[int, int]] = {
-    "1h": (12, 300), "24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY),
+    "1h": (60, 60), "24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY),
 }
-HISTORY_STEP: dict[str, int] = {"1h": 300, "24h": 300, "7d": HOUR, "30d": 6 * HOUR}
+HISTORY_STEP: dict[str, int] = {"1h": 60, "24h": 300, "7d": HOUR, "30d": 6 * HOUR}
 _RAW_RANGES = ("1h", "24h")
 MIN_CHECKS_FOR_RANKING = 10
 PING_WINDOW = 600  # public ping: median of the successful checks in the last 10 minutes
