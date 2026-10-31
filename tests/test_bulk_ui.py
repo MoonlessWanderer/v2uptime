@@ -8,6 +8,8 @@ import urllib.request
 import pytest
 import uvicorn
 
+pytest.importorskip("playwright.sync_api")
+
 from app.config import Config
 from app.main import create_app
 from app.models import Admin
