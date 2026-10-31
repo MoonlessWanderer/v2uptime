@@ -247,8 +247,8 @@
     return t < first ? 0 : items.length - 1;
   }
 
-  /* Open card: the line is one point per slot. The tooltip is that point, not the average of the
-     wider status-bar cell. The cursor sits on the point; the bar cell that contains it is highlighted.
+  /* Open card: one chart point per status-bar cell, on the same slot. The tooltip is that cell.
+     The cursor sits on the point and the cell under it is highlighted.
      The tooltip goes above the bar beside the numbers when there is room, else into the chart. */
   function pointTimeline(timeline, clientX) {
     var data = timeline._data;

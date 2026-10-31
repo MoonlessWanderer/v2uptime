@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- An open card starts on 1h. The chart and the status bar are the same 60 one-minute cells, and each point's ping is the median of that minute. 24h, 7d, and 30d stay on the same control.
-- A 24h chart point is the median ping of that 5-minute slot. The open-card tooltip shows that point, not the average of the wider status-bar cell.
+## 1.4.0
+
+- An open card starts on 1h, and the same control has 24h, 7d, and 30d. On every range the chart point is the same cell as the status bar. A 1h or 24h point's ping is the median of that cell; a 7d or 30d point's ping is the average of that cell. The tooltip shows that cell.
 - A closed card shows the last 60 checks, one cell each, labelled 1h. Online, Degraded, and Down no longer include the uptime percent on that line. The open card and its 24h/7d/30d bars are unchanged.
 - An update no longer crash-loops when `servers.subscription_id` still references a `subscriptions` table that is already gone. The column is removed by rebuilding `servers`, and the servers and their history stay.
 - The public page and the admin panel use Vazirmatn at two weights (400 and 600) and one size scale. Sort tabs no longer recolor ping or uptime.

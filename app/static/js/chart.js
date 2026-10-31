@@ -308,16 +308,14 @@
       ctx.lineTo(r[r.length - 1].x, plotH); ctx.lineTo(r[0].x, plotH); ctx.closePath();
       ctx.globalAlpha = 0.14; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
     });
-    if (cfg.range === "1h") {
-      ctx.fillStyle = color;
-      runs.forEach(function (r) {
-        r.forEach(function (p) {
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, 2.25, 0, Math.PI * 2);
-          ctx.fill();
-        });
+    ctx.fillStyle = color;
+    runs.forEach(function (r) {
+      r.forEach(function (p) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.25, 0, Math.PI * 2);
+        ctx.fill();
       });
-    }
+    });
     if (!values.length) {
       ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; applyFont(this, ctx);
       ctx.fillText("No ping data", w / 2, plotH / 2);
