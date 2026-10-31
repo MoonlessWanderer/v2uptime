@@ -71,7 +71,7 @@ def add_links(text: str, is_public: bool = True, tags: str = "") -> AddResult:
 
 def update_server(server_id: int, *, name: str, country: str, tags: str, is_active: bool, is_public: bool,
                   raw_link: str) -> Server:
-    """Raises LinkParseError / ValueError with a Persian message."""
+    """Raises LinkParseError or ValueError with a message safe to show the admin."""
     server = Server.get_by_id(server_id)
     name = (name or "").strip()
     if not name:

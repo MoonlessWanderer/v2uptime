@@ -1,0 +1,14 @@
+{% if section == "servers" %}
+<div class="segmented section-tabs" role="tablist" aria-label="Servers">
+  <a class="seg{{ ' is-active' if tab == 'servers' }}" href="{{ admin_url('/servers') }}">Servers</a>
+  <a class="seg{{ ' is-active' if tab == 'subscriptions' }}" href="{{ admin_url('/subscriptions') }}">Subscriptions</a>
+</div>
+{% elif section == "settings" %}
+<div class="segmented section-tabs" role="tablist" aria-label="Settings">
+  <a class="seg" href="{{ admin_url('/settings') }}" data-settings-tab="general">General</a>
+  <a class="seg" href="{{ admin_url('/settings') }}#monitoring" data-settings-tab="monitoring">Monitoring</a>
+  <a class="seg{{ ' is-active' if tab == 'telegram' }}" href="{{ admin_url('/telegram') }}">Telegram</a>
+  <a class="seg{{ ' is-active' if tab == 'backup' }}" href="{{ admin_url('/backup') }}">Backup</a>
+  <a class="seg{{ ' is-active' if tab == 'account' }}" href="{{ admin_url('/password') }}">Account</a>
+</div>
+{% endif %}

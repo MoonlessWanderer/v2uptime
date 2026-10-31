@@ -447,7 +447,6 @@ class StatsService:
                     "level": bar_level(c.uptime), "uptime": _round(c.uptime, 2), "checks": c.valid,
                     "incidents": sum(bucket.start <= s < bucket.end for s in starts),
                 })
-            spark = [p.latency_ms if p.status == "ok" else None for p in self.live.points(server.id)][-60:]
             cards.append({
                 "id": server.id, "name": server.name, "country": server.country,
                 "flag": flag_emoji(server.country), "protocol": server.protocol, "transport": server.transport,
@@ -459,7 +458,7 @@ class StatsService:
                 "last_check_at": iso_utc(m.last_check_at) if m.last_check_at else None,
                 "last_check_label": fmt_datetime(m.last_check_at, tz) if m.last_check_at else None,
                 "last_incident": _last_incident(last_by_server.get(server.id), now),
-                "bars": bucket_items, "spark": spark,
+                "bars": bucket_items,
             })
         public_metrics = [metrics[c["id"]] for c in cards if c["id"] in metrics]
         uptimes = [c["uptime_24h"] for c in cards if c["uptime_24h"] is not None]

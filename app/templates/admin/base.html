@@ -27,12 +27,8 @@
     <nav class="sidenav" id="sidenav" aria-label="Admin">
       {{ nav_link('dashboard', '/', 'home', 'Dashboard') }}
       {{ nav_link('servers', '/servers', 'server', 'Servers') }}
-      {{ nav_link('subscriptions', '/subscriptions', 'link', 'Subscriptions') }}
       {{ nav_link('incidents', '/incidents', 'alert', 'Incidents') }}
-      {{ nav_link('telegram', '/telegram', 'send', 'Telegram') }}
       {{ nav_link('settings', '/settings', 'settings', 'Settings') }}
-      {{ nav_link('backup', '/backup', 'archive', 'Backup') }}
-      {{ nav_link('password', '/password', 'key', 'Password') }}
     </nav>
     <main class="admin-main">
       {% for kind, message in flashes %}

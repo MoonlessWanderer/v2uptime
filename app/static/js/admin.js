@@ -143,6 +143,40 @@
     });
   }
 
+  /* add-server preview */
+  var linkBox = document.getElementById("links");
+  var preview = document.getElementById("link-preview");
+  if (linkBox && preview) {
+    var previewTimer;
+    linkBox.addEventListener("input", function () {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(function () {
+        var text = linkBox.value.trim();
+        if (!text) { preview.hidden = true; preview.innerHTML = ""; return; }
+        post(base + "/servers/preview", { links: linkBox.value }).then(function (r) {
+          var html = "";
+          if (r.valid && r.valid.length) {
+            html += "<p><strong>Valid (" + r.valid.length + ")</strong></p><ul>";
+            r.valid.forEach(function (item) {
+              html += "<li><bdi>" + esc(item.name) + "</bdi> · " + esc(item.protocol) + "</li>";
+            });
+            html += "</ul>";
+          }
+          if (r.invalid && r.invalid.length) {
+            html += "<p><strong>Invalid (" + r.invalid.length + ")</strong></p><ul>";
+            r.invalid.forEach(function (item) {
+              html += "<li>Line " + esc(item.line) + ": " + esc(item.message) + "</li>";
+            });
+            html += "</ul>";
+          }
+          if (!html) html = "<p class=\"muted\">Nothing to preview yet.</p>";
+          preview.innerHTML = html;
+          preview.hidden = false;
+        }).catch(function () { preview.hidden = true; });
+      }, 250);
+    });
+  }
+
   /* server detail charts */
   var history = document.querySelector("[data-history]");
   if (history && window.MiniChart) {

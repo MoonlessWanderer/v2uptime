@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
 from app.db import run_db
-from app.services.stats import RANGE_LABELS, RANGES
+from app.services.stats import RANGES
 from app.web import render
 
 router = APIRouter()
@@ -22,15 +22,15 @@ async def _payload(request: Request, range_key: str) -> dict:
 
 @router.get("/", response_class=HTMLResponse)
 async def index(request: Request, range: str | None = None):
-    range_key = _range(range)
-    data = await _payload(request, range_key)
-    return render(request, "public/index.html", {"data": data, "ranges": RANGE_LABELS})
+    # The list is always the last 24 hours. ?range= is echoed for older clients and tests.
+    data = await _payload(request, "24h")
+    return render(request, "public/index.html", {"data": data, "echo_range": _range(range)})
 
 
 @router.get("/partials/live", response_class=HTMLResponse)
 async def live_fragment(request: Request, range: str | None = None):
-    data = await _payload(request, _range(range))
-    response = render(request, "public/_live.html", {"data": data})
+    data = await _payload(request, "24h")
+    response = render(request, "public/_live.html", {"data": data, "echo_range": _range(range)})
     response.headers["Cache-Control"] = "no-store"
     return response
 

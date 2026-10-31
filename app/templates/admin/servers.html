@@ -2,19 +2,19 @@
 {% block page_title %}Servers{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Servers</h1><span class="muted">{{ rows|length }} servers · Drag rows, or use the up and down buttons, to reorder.</span></div>
+{% include "admin/_tabs.html" %}
 
 <section class="panel">
   <h2>Add servers</h2>
   <form method="post" action="{{ admin_url('/servers/add') }}" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <div class="field full">
-      <label for="links">Links (one per line; Base64 subscription content is accepted too)</label>
-      <textarea id="links" name="links" class="mono" rows="5" placeholder="vless://...&#10;vmess://...&#10;trojan://...&#10;ss://..." required></textarea>
-      <span class="help">The link remark becomes the server name. For a subscription that syncs on a schedule, use the Subscriptions page.</span>
+      <label for="links" class="muted">Links</label>
+      <textarea id="links" name="links" class="mono" rows="8" placeholder="Paste share links or subscription content, one per line" required></textarea>
     </div>
-    <div class="field"><label for="tags">Tags (optional, comma-separated)</label><input type="text" id="tags" name="tags" dir="auto" placeholder="eu, economy"></div>
-    <div class="field" style="align-self:end"><label class="check"><input type="checkbox" name="is_public" value="1" checked> Show on the public page</label></div>
-    <div class="form-actions full"><button class="btn btn-primary" type="submit"><svg class="ic"><use href="#i-plus"/></svg>Add</button></div>
+    <input type="hidden" name="is_public" value="1">
+    <div id="link-preview" class="full" hidden></div>
+    <div class="form-actions full"><button class="btn btn-primary" type="submit">Save</button></div>
   </form>
 </section>
 

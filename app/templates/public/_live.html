@@ -1,35 +1,63 @@
-{% from "public/_card.html" import card %}
-<section class="summary" aria-label="Status summary">
-  <div class="stat stat-online">
-    <svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>
-    <div><span class="stat-value">{{ data.summary.online }}</span><span class="stat-label">Online</span></div>
-  </div>
-  <div class="stat stat-degraded">
-    <svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>
-    <div><span class="stat-value">{{ data.summary.degraded }}</span><span class="stat-label">Degraded</span></div>
-  </div>
-  <div class="stat stat-offline">
-    <svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>
-    <div><span class="stat-value">{{ data.summary.offline }}</span><span class="stat-label">Down</span></div>
-  </div>
-  <div class="stat stat-uptime">
-    <svg class="ic" aria-hidden="true"><use href="#i-gauge"/></svg>
-    <div><span class="stat-value">{{ data.summary.avg_uptime_24h|percent }}</span><span class="stat-label">Average uptime, 24h</span></div>
-  </div>
-</section>
-<p class="updated" data-generated="{{ data.generated_at }}">
-  <svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>
-  Last check: {{ data.last_check_at|time_tag }}
-  <span class="sep">·</span> {{ data.summary.total }} servers
-</p>
-<script type="application/json" id="bucket-labels">{{ data.buckets|map(attribute="label")|list|tojson }}</script>
-{% if data.servers %}
-<div class="cards" id="cards" data-range="{{ data.range }}">
-  {% for s in data.servers %}{{ card(s, loop.index, data) }}{% endfor %}
-</div>
+{% set down = data.summary.offline %}
+{% set degraded = data.summary.degraded %}
+{% set online = data.servers|selectattr('status', 'equalto', 'online')|rejectattr('collecting')|list|length %}
+{% set total = data.summary.total %}
+{% set noun = 'server' if total == 1 else 'servers' %}
+{% if total %}
+{% if online == total %}
+<p class="banner banner-ok" aria-live="polite">✓ All servers are online</p>
+{% elif down %}
+<p class="banner banner-bad" aria-live="polite">{{ down }} of {{ total }} {{ noun }} {{ 'is' if down == 1 else 'are' }} down{% if degraded %} · {{ degraded }} degraded{% endif %}</p>
+{% elif degraded %}
+<p class="banner banner-warn" aria-live="polite">{{ degraded }} of {{ total }} {{ noun }} {{ 'is' if degraded == 1 else 'are' }} degraded</p>
 {% else %}
-<div class="empty">
-  <svg class="ic" aria-hidden="true"><use href="#i-server"/></svg>
-  <p>No servers to show yet.</p>
-</div>
+<p class="banner banner-wait" aria-live="polite">{{ online }} of {{ total }} {{ noun }} {{ 'is' if online == 1 else 'are' }} online</p>
 {% endif %}
+<p class="fine check-line">Last check: {{ data.last_check_at|time_tag }}{% if data.site.location %} · Test location: <bdi>{{ data.site.location }}</bdi>{% endif %}</p>
+{% endif %}
+<script type="application/json" id="bucket-meta">{{ data.buckets|tojson }}</script>
+<div data-range="{{ echo_range }}">
+{% if data.servers %}
+<div class="list-head fine" aria-hidden="true"><span>Server</span><span>Status</span><span>Ping</span><span>Uptime (24h)</span></div>
+<ul class="server-list" id="servers">
+  {% for s in data.servers %}
+  {% set rank_fast = data.order.fastest.index(s.id) + 1 if s.id in data.order.fastest else "" %}
+  {% set rank_stable = data.order.stable.index(s.id) + 1 if s.id in data.order.stable else "" %}
+  <li data-id="{{ s.id }}" data-order="{{ loop.index }}" data-collecting="{{ '1' if s.collecting else '0' }}"
+      data-rank-fastest="{{ rank_fast }}" data-rank-stable="{{ rank_stable }}" data-status="{{ s.status }}"
+      data-search="{{ (s.name ~ ' ' ~ s.protocol ~ ' ' ~ s.country ~ ' ' ~ s.tags|join(' '))|lower }}">
+    <button type="button" class="row-main" aria-expanded="false" aria-controls="detail-{{ s.id }}">
+      <span class="row-server" title="{{ s.name }}">{% if s.flag %}<span class="flag" aria-hidden="true">{{ s.flag }}</span> {% endif %}<bdi>{{ s.name }}</bdi></span>
+      <span class="row-status{% if s.collecting %} is-new{% endif %}">{% if s.collecting %}<span class="status-dot"></span>New{% else %}<span class="status-dot {{ s.status }}"></span>{{ s.status_label }}{% endif %}</span>
+      <span class="row-ping">{{ s.latency_ms|ms }}</span>
+      <span class="row-up">{{ s.uptime_24h|percent }}</span>
+    </button>
+    <div class="row-detail" id="detail-{{ s.id }}" hidden>
+      <p>Uptime 24h {{ s.uptime_24h|percent }} · 7d {{ s.uptime_7d|percent }} · 30d {{ s.uptime_30d|percent }}</p>
+      <div class="bars" role="img" aria-label="Status for the last 24 hours">
+        {%- for b in s.bars -%}
+        <i class="b lv-{{ b.level }}" data-i="{{ loop.index0 }}" data-u="{{ b.uptime if b.uptime is not none else '' }}"></i>
+        {%- endfor -%}
+      </div>
+      <div class="bars-axis fine"><span>24h ago</span><span>Now</span></div>
+      <p class="fine">
+        {% if s.last_incident %}
+        Last incident: {{ s.last_incident.started_at|time_tag("ago") }} · {% if s.last_incident.ended_at %}lasted {{ s.last_incident.duration_seconds|duration }}{% else %}ongoing{% endif %}
+        {% else %}
+        No incidents in the last 30 days.
+        {% endif %}
+      </p>
+      <div class="segmented chart-range" role="group" aria-label="Ping chart range">
+        <button type="button" class="seg is-active" data-range="24h">24h</button>
+        <button type="button" class="seg" data-range="7d">7d</button>
+        <button type="button" class="seg" data-range="30d">30d</button>
+      </div>
+      <div class="chart"><canvas aria-label="Ping chart"></canvas></div>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<div class="empty"><p>No servers to show yet.</p></div>
+{% endif %}
+</div>

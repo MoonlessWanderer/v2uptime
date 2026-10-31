@@ -30,8 +30,10 @@ from app.security import (
 from app.services import backup as backup_service
 from app.services import servers as server_service
 from app.services.checker import error_label
-from app.services.parser import LinkParseError
-from app.services.settings import BY_KEY, DEFINITIONS, GROUPS, SettingError, mask_secret, settings, validate
+from app.services.parser import LinkParseError, parse_many
+from app.services.settings import (
+    ADVANCED_KEYS, BY_KEY, DEFINITIONS, SettingError, mask_secret, settings, validate,
+)
 from app.services.stats import RANGES, incident_stats
 from app.services.subscriptions import validate_url
 from app.services.telegram.outbox_worker import queue_stats
@@ -160,7 +162,7 @@ async def dashboard(request: Request):
                 counts=counts, total=len(metrics), problem=problem, recent=recent, report=report,
                 xray=svc.xray.status(), queue=await run_db(queue_stats), network_down=svc.monitor.network_down_since,
                 telegram_enabled=settings.get("telegram_enabled"), xray_log=list(svc.xray.output)[-15:],
-                bot_error=svc.bot.last_error)
+                bot_error=svc.bot.last_error, now=now_ts())
 
 
 # ---------------------------------------------------------------- servers
@@ -183,7 +185,7 @@ def _server_rows(svc) -> list[dict[str, Any]]:
 async def servers_page(request: Request):
     admin = await require_admin(request)
     rows = await run_db(_server_rows, services(request))
-    return page(request, "servers.html", admin, "servers", rows=rows)
+    return page(request, "servers.html", admin, "servers", rows=rows, section="servers", tab="servers")
 
 
 @router.post("/servers/add")
@@ -202,6 +204,17 @@ async def servers_add(request: Request):
     if not (result.created or result.duplicates or result.errors):
         flash(request, "error", "No links were entered.")
     return redirect("/servers")
+
+
+@router.post("/servers/preview")
+async def servers_preview(request: Request):
+    await require_admin(request)
+    body = await checked_json(request)
+    bulk = parse_many(str(body.get("links", "")))
+    return {
+        "valid": [{"name": link.default_name, "protocol": link.protocol.upper()} for link in bulk.links],
+        "invalid": [{"line": line, "message": message} for line, _excerpt, message in bulk.errors],
+    }
 
 
 @router.post("/servers/reorder")
@@ -334,7 +347,8 @@ async def subscriptions_page(request: Request):
         return subs, counts
 
     subs, counts = await run_db(load)
-    return page(request, "subscriptions.html", admin, "subscriptions", subs=subs, counts=counts)
+    return page(request, "subscriptions.html", admin, "servers", subs=subs, counts=counts,
+                section="servers", tab="subscriptions")
 
 
 @router.post("/subscriptions/add")
@@ -432,8 +446,11 @@ async def incidents_page(request: Request, server: int | None = None, range: str
 
 # --------------------------------------------------------------- settings
 
-def _settings_groups(groups: list[str]) -> list[tuple[str, str, list[Any]]]:
-    return [(g, GROUPS[g], [d for d in DEFINITIONS if d.group == g and not d.internal]) for g in groups]
+def _partition(groups: list[str]) -> tuple[list[Any], list[Any]]:
+    defs = [d for g in groups for d in DEFINITIONS if d.group == g and not d.internal]
+    main = [d for d in defs if d.key not in ADVANCED_KEYS]
+    advanced = [d for d in defs if d.key in ADVANCED_KEYS]
+    return main, advanced
 
 
 def _collect(form: FormData, keys: list[str]) -> tuple[dict[str, Any], list[str]]:
@@ -461,8 +478,11 @@ def _collect(form: FormData, keys: list[str]) -> tuple[dict[str, Any], list[str]
 @router.get("/settings")
 async def settings_page(request: Request):
     admin = await require_admin(request)
-    return page(request, "settings.html", admin, "settings",
-                groups=_settings_groups(["general", "checks", "status", "retention"]), values=settings.all())
+    general_main, general_adv = _partition(["general"])
+    monitor_main, monitor_adv = _partition(["checks", "status", "retention"])
+    return page(request, "settings.html", admin, "settings", values=settings.all(), section="settings", tab="general",
+                general_main=general_main, general_adv=general_adv,
+                monitor_main=monitor_main, monitor_adv=monitor_adv)
 
 
 @router.post("/settings")
@@ -494,10 +514,12 @@ async def telegram_page(request: Request):
     svc = services(request)
     servers = await run_db(lambda: list(Server.select().where(Server.is_active == True)  # noqa: E712
                                         .order_by(Server.sort_order, Server.id)))
-    return page(request, "telegram.html", admin, "telegram", groups=_settings_groups(["telegram"]),
+    telegram_main, telegram_adv = _partition(["telegram"])
+    return page(request, "telegram.html", admin, "settings",
+                telegram_main=telegram_main, telegram_adv=telegram_adv,
                 values=settings.all(), masked_token=mask_secret(settings.get("telegram_token")),
                 servers=servers, queue=await run_db(queue_stats), bot_error=svc.bot.last_error,
-                last_route=svc.sender.last_route_key)
+                last_route=svc.sender.last_route_key, section="settings", tab="telegram")
 
 
 @router.post("/telegram")
@@ -530,7 +552,7 @@ async def telegram_test(request: Request):
 @router.get("/password")
 async def password_page(request: Request):
     admin = await require_admin(request)
-    return page(request, "password.html", admin, "password")
+    return page(request, "password.html", admin, "settings", section="settings", tab="account")
 
 
 @router.post("/password")
@@ -558,7 +580,7 @@ async def password_change(request: Request):
 @router.get("/backup")
 async def backup_page(request: Request):
     admin = await require_admin(request)
-    return page(request, "backup.html", admin, "backup")
+    return page(request, "backup.html", admin, "settings", section="settings", tab="backup")
 
 
 @router.get("/backup/export")

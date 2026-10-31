@@ -2,17 +2,24 @@
 {% from "admin/_fields.html" import field %}
 {% block page_title %}Telegram{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Telegram bot</h1></div>
+<div class="page-head"><h1>Telegram</h1></div>
+{% include "admin/_tabs.html" %}
 
 <div class="grid-2">
   <form method="post" action="{{ admin_url('/telegram') }}" class="panel">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
-    {% for key, title, defs in groups %}
-    <h2>{{ title }}</h2>
+    <h2>Telegram</h2>
     <div class="form-grid single">
-      {% for d in defs %}{{ field(d, values[d.key], masked_token if d.key == 'telegram_token' else '', servers) }}{% endfor %}
+      {% for d in telegram_main %}{{ field(d, values[d.key], masked_token if d.key == 'telegram_token' else '', servers) }}{% endfor %}
     </div>
-    {% endfor %}
+    {% if telegram_adv %}
+    <details class="advanced">
+      <summary>Advanced settings</summary>
+      <div class="form-grid single">
+        {% for d in telegram_adv %}{{ field(d, values[d.key], '', servers) }}{% endfor %}
+      </div>
+    </details>
+    {% endif %}
     <p class="help muted">Down and up thresholds are the N and M values on the Settings page. Automatic mode tries a direct send (5 seconds), then up to 4 online servers.</p>
     <div class="form-actions"><button class="btn btn-primary" type="submit">Save</button></div>
   </form>

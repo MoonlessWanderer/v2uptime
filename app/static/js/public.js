@@ -1,133 +1,177 @@
-/* Public status page: tabs, filters, search, live refresh, bar tooltips, detail modal. */
+/* Public status page: sort, search, accordion, one ping chart, 60s refresh. */
 (function () {
   "use strict";
 
   var REFRESH_MS = 60000;
   var live = document.getElementById("live");
   var tooltip = document.getElementById("tooltip");
-  var emptyFilter = document.getElementById("empty-filter");
+  var emptySearch = document.getElementById("empty-search");
   var search = document.getElementById("q");
-  var modal = document.getElementById("modal");
-
-  var state = { tab: "all", range: live.getAttribute("data-range") || "24h", status: "all", query: "", modalId: null, modalRange: "24h" };
+  var state = { tab: "all", query: "", open: {}, ranges: {} };
+  var cache = {};
   try {
     var saved = JSON.parse(localStorage.getItem("status-view") || "{}");
-    if (saved.tab) state.tab = saved.tab;
+    if (saved.tab === "fastest" || saved.tab === "stable" || saved.tab === "all") state.tab = saved.tab;
   } catch (e) { /* ignore */ }
 
-  function save() {
+  function saveTab() {
     try { localStorage.setItem("status-view", JSON.stringify({ tab: state.tab })); } catch (e) { /* ignore */ }
   }
 
-  function setActive(selector, attr, value) {
-    document.querySelectorAll(selector).forEach(function (el) {
-      var on = el.getAttribute(attr) === value;
-      el.classList.toggle("is-active", on);
-      if (el.getAttribute("role") === "tab") el.setAttribute("aria-selected", on ? "true" : "false");
-      if (el.hasAttribute("aria-pressed")) el.setAttribute("aria-pressed", on ? "true" : "false");
-    });
-  }
-
-  /* ---------------------------------------------------------- view */
   function applyView() {
-    var container = document.getElementById("cards");
     document.body.classList.toggle("view-fastest", state.tab === "fastest");
     document.body.classList.toggle("view-stable", state.tab === "stable");
-    setActive(".tab", "data-tab", state.tab);
-    setActive(".filter", "data-filter", state.status);
-    if (!container) { emptyFilter.hidden = true; return; }
-    var cards = Array.prototype.slice.call(container.querySelectorAll(".card"));
+    document.querySelectorAll("[data-tab]").forEach(function (el) {
+      var on = el.getAttribute("data-tab") === state.tab;
+      el.classList.toggle("is-active", on);
+      el.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    var ul = document.getElementById("servers");
+    if (!ul) { if (emptySearch) emptySearch.hidden = true; return; }
     var key = state.tab === "fastest" ? "data-rank-fastest" : state.tab === "stable" ? "data-rank-stable" : "data-order";
-    cards.sort(function (a, b) {
+    var rows = Array.prototype.slice.call(ul.children);
+    rows.sort(function (a, b) {
+      var ca = a.getAttribute("data-collecting") === "1" ? 1 : 0;
+      var cb = b.getAttribute("data-collecting") === "1" ? 1 : 0;
+      if (ca !== cb) return ca - cb;
       var ra = parseInt(a.getAttribute(key), 10), rb = parseInt(b.getAttribute(key), 10);
       return (isNaN(ra) ? 1e9 : ra) - (isNaN(rb) ? 1e9 : rb);
     });
-    var visible = 0;
-    cards.forEach(function (card) {
-      container.appendChild(card);
-      var ranked = state.tab === "all" || card.getAttribute(key) !== "";
-      var statusOk = state.status === "all" || card.getAttribute("data-status") === state.status;
-      var queryOk = !state.query || card.getAttribute("data-search").indexOf(state.query) !== -1;
-      var show = ranked && statusOk && queryOk;
-      card.hidden = !show;
-      if (show) visible++;
+    var shown = 0;
+    rows.forEach(function (row) {
+      ul.appendChild(row);
+      var text = row.getAttribute("data-search") || "";
+      var match = !state.query || text.indexOf(state.query) !== -1;
+      row.hidden = !match;
+      if (match) shown++;
     });
-    emptyFilter.hidden = visible > 0 || cards.length === 0;
+    if (emptySearch) emptySearch.hidden = shown > 0 || rows.length === 0;
   }
 
-  /* ---------------------------------------------------------- refresh */
+  function setRange(detail, range) {
+    detail.querySelectorAll("[data-range]").forEach(function (el) {
+      el.classList.toggle("is-active", el.getAttribute("data-range") === range);
+    });
+  }
+
+  function drawChart(canvas, data) {
+    if (!canvas || !canvas.isConnected || !window.MiniChart) return;
+    window.MiniChart.render(canvas, {
+      type: "line",
+      values: data.points.map(function (p) { return p.latency; }),
+      times: data.points.map(function (p) { return p.t; }),
+      range: data.range,
+      unit: "ms"
+    });
+  }
+
+  function loadChart(id, range, canvas) {
+    if (!canvas) return;
+    var key = id + ":" + range;
+    var box = canvas.closest(".chart");
+    if (cache[key]) { drawChart(canvas, cache[key]); if (box) box.classList.remove("is-loading"); return; }
+    if (box) box.classList.add("is-loading");
+    fetch("/api/servers/" + encodeURIComponent(id) + "/history?range=" + encodeURIComponent(range))
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (data) { cache[key] = data; drawChart(canvas, data); })
+      .catch(function () { /* keep the skeleton */ })
+      .then(function () { if (box) box.classList.remove("is-loading"); });
+  }
+
+  function restore() {
+    Object.keys(state.open).forEach(function (id) {
+      if (!state.open[id]) return;
+      var row = document.querySelector('#servers > li[data-id="' + id + '"]');
+      if (!row) return;
+      var btn = row.querySelector(".row-main");
+      var detail = document.getElementById("detail-" + id);
+      if (!btn || !detail) return;
+      detail.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+      var range = state.ranges[id] || "24h";
+      setRange(detail, range);
+      loadChart(id, range, detail.querySelector("canvas"));
+    });
+  }
+
   var refreshing = false;
   function refresh() {
-    if (refreshing) return;
+    if (refreshing || document.hidden) return;
     refreshing = true;
-    live.classList.add("loading");
-    fetch("/partials/live?range=" + encodeURIComponent(state.range), { headers: { "Accept": "text/html" } })
+    var y = window.scrollY;
+    var focusId = "";
+    var active = document.activeElement;
+    if (active && active.closest) {
+      var focused = active.closest("#servers > li");
+      if (focused) focusId = focused.getAttribute("data-id") || "";
+    }
+    fetch("/partials/live?range=24h", { headers: { "Accept": "text/html" } })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(function (html) {
         live.innerHTML = html;
-        live.setAttribute("data-range", state.range);
         applyView();
+        restore();
+        window.scrollTo(0, y);
+        if (focusId) {
+          var btn = document.querySelector('#servers > li[data-id="' + focusId + '"] .row-main');
+          if (btn) btn.focus();
+        }
       })
-      .catch(function () { /* keep the old content */ })
-      .then(function () { refreshing = false; live.classList.remove("loading"); });
+      .catch(function () { /* keep the current list */ })
+      .then(function () { refreshing = false; });
   }
 
-  var timer = setInterval(refresh, REFRESH_MS);
-  document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { clearInterval(timer); timer = null; }
-    else if (!timer) { refresh(); timer = setInterval(refresh, REFRESH_MS); }
+  document.querySelectorAll("[data-tab]").forEach(function (el) {
+    el.addEventListener("click", function () { state.tab = el.getAttribute("data-tab"); saveTab(); applyView(); });
   });
-
-  /* ---------------------------------------------------------- controls */
-  document.querySelectorAll(".tab").forEach(function (el) {
-    el.addEventListener("click", function () { state.tab = el.getAttribute("data-tab"); save(); applyView(); });
-  });
-  document.querySelectorAll(".filter").forEach(function (el) {
-    el.addEventListener("click", function () { state.status = el.getAttribute("data-filter"); applyView(); });
-  });
-  document.querySelectorAll("#range-switch .seg").forEach(function (el) {
-    el.addEventListener("click", function (e) {
-      e.preventDefault();
-      state.range = el.getAttribute("data-range");
-      setActive("#range-switch .seg", "data-range", state.range);
-      if (history.replaceState) history.replaceState(null, "", "?range=" + state.range);
-      refresh();
+  if (search) {
+    var timer;
+    search.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { state.query = search.value.trim().toLowerCase(); applyView(); }, 120);
     });
-  });
-  var searchTimer;
-  search.addEventListener("input", function () {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(function () { state.query = search.value.trim().toLowerCase(); applyView(); }, 120);
+  }
+
+  live.addEventListener("click", function (e) {
+    var rangeBtn = e.target.closest(".chart-range [data-range]");
+    if (rangeBtn) {
+      var row = rangeBtn.closest("#servers > li");
+      var detail = rangeBtn.closest(".row-detail");
+      var id = row.getAttribute("data-id");
+      var range = rangeBtn.getAttribute("data-range");
+      state.ranges[id] = range;
+      setRange(detail, range);
+      loadChart(id, range, detail.querySelector("canvas"));
+      return;
+    }
+    var btn = e.target.closest(".row-main");
+    if (!btn) return;
+    var item = btn.closest("#servers > li");
+    var open = btn.getAttribute("aria-expanded") !== "true";
+    var panel = document.getElementById(btn.getAttribute("aria-controls"));
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    panel.hidden = !open;
+    state.open[item.getAttribute("data-id")] = open;
+    if (open) loadChart(item.getAttribute("data-id"), state.ranges[item.getAttribute("data-id")] || "24h", panel.querySelector("canvas"));
   });
 
-  /* ---------------------------------------------------------- bar tooltips */
-  function bucketLabels() {
-    var el = document.getElementById("bucket-labels");
+  function buckets() {
+    var el = document.getElementById("bucket-meta");
     try { return el ? JSON.parse(el.textContent) : []; } catch (e) { return []; }
   }
-  var hovered = null;
   function showTip(bar) {
-    if (hovered) hovered.classList.remove("is-hover");
-    hovered = bar;
-    bar.classList.add("is-hover");
-    var labels = bucketLabels();
-    var u = bar.getAttribute("data-u"), n = parseInt(bar.getAttribute("data-n") || "0", 10);
-    var lines = "<strong>" + (u === "" ? "No data" : u + "% uptime") + "</strong>";
-    lines += esc(labels[+bar.getAttribute("data-i")] || "");
-    if (n > 0) lines += "<br>" + n + " incidents";
-    tooltip.innerHTML = lines;
+    var item = buckets()[+bar.getAttribute("data-i")] || {};
+    var start = window.UptimeTime ? window.UptimeTime.formatTime(item.start) : "";
+    var end = window.UptimeTime ? window.UptimeTime.formatTime(item.end) : "";
+    var u = bar.getAttribute("data-u");
+    tooltip.textContent = start + "–" + end + " · " + (u === "" ? "No data" : u + "%");
     tooltip.hidden = false;
-    var r = bar.getBoundingClientRect(), t = tooltip.getBoundingClientRect();
-    var left = Math.min(Math.max(8, r.left + r.width / 2 - t.width / 2), window.innerWidth - t.width - 8);
-    var top = r.top - t.height - 8;
-    if (top < 8) top = r.bottom + 8;
-    tooltip.style.left = left + "px";
-    tooltip.style.top = top + "px";
+    var r = bar.getBoundingClientRect();
+    var t = tooltip.getBoundingClientRect();
+    tooltip.style.left = Math.min(Math.max(8, r.left + r.width / 2 - t.width / 2), window.innerWidth - t.width - 8) + "px";
+    tooltip.style.top = Math.max(8, r.top - t.height - 8) + "px";
   }
-  function hideTip() {
-    tooltip.hidden = true;
-    if (hovered) { hovered.classList.remove("is-hover"); hovered = null; }
-  }
+  function hideTip() { tooltip.hidden = true; }
   live.addEventListener("pointerover", function (e) {
     var bar = e.target.closest(".b");
     if (bar && e.pointerType === "mouse") showTip(bar);
@@ -137,98 +181,10 @@
   });
   window.addEventListener("scroll", hideTip, { passive: true });
 
-  /* ---------------------------------------------------------- card clicks */
-  live.addEventListener("click", function (e) {
-    var bar = e.target.closest(".b");
-    if (bar && e.pointerType !== "mouse" && (!hovered || hovered !== bar)) {
-      // On touch, the first tap on a bar shows its tooltip instead of opening the card.
-      showTip(bar);
-      return;
-    }
-    hideTip();
-    var card = e.target.closest(".card");
-    if (card) openModal(card.getAttribute("data-id"));
+  var pulse = setInterval(refresh, REFRESH_MS);
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) { clearInterval(pulse); pulse = null; }
+    else if (!pulse) { refresh(); pulse = setInterval(refresh, REFRESH_MS); }
   });
-  live.addEventListener("keydown", function (e) {
-    var card = e.target.closest(".card");
-    if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openModal(card.getAttribute("data-id")); }
-  });
-
-  /* ---------------------------------------------------------- modal */
-  var lastFocus = null;
-  function openModal(id) {
-    state.modalId = id;
-    state.modalRange = state.range;
-    lastFocus = document.activeElement;
-    modal.hidden = false;
-    document.body.style.overflow = "hidden";
-    loadHistory();
-    modal.querySelector(".modal-dialog [data-close]").focus();
-  }
-  function closeModal() {
-    modal.hidden = true;
-    document.body.style.overflow = "";
-    state.modalId = null;
-    if (lastFocus) lastFocus.focus();
-  }
-  modal.addEventListener("click", function (e) { if (e.target.closest("[data-close]")) closeModal(); });
-  document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !modal.hidden) closeModal(); });
-  document.querySelectorAll("#m-range .seg").forEach(function (el) {
-    el.addEventListener("click", function () { state.modalRange = el.getAttribute("data-range"); loadHistory(); });
-  });
-
-  function esc(text) {
-    return String(text === null || text === undefined ? "" : text).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
-  function pct(v) { return v === null || v === undefined ? "—" : String(v) + "%"; }
-  function ms(v) { return v === null || v === undefined ? "—" : Math.round(v) + " ms"; }
-
-  function loadHistory() {
-    var id = state.modalId, range = state.modalRange;
-    setActive("#m-range .seg", "data-range", range);
-    document.getElementById("m-body").classList.add("loading");
-    fetch("/api/servers/" + encodeURIComponent(id) + "/history?range=" + range)
-      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(function (data) {
-        if (state.modalId !== id) return;
-        var s = data.server;
-        document.getElementById("m-title").textContent = (s.flag ? s.flag + " " : "") + s.name;
-        document.getElementById("m-sub").textContent = s.protocol.toUpperCase() + " · " + s.transport + " · " + s.status_label;
-        var sum = data.summary, inc = data.incident_stats;
-        var stats = [
-          ["Uptime " + data.range_label, pct(sum.uptime)],
-          ["Average ping", ms(sum.avg_latency)],
-          ["Min / max", (sum.min_latency === null ? "—" : sum.min_latency + " / " + sum.max_latency) + " ms"],
-          ["Jitter", ms(sum.jitter)],
-          ["Incidents", String(inc.count)],
-          ["Total downtime", inc.downtime_label],
-          ["Mean time to recover", inc.mttr_label],
-          ["Stability score", s.stability === null ? "—" : String(s.stability)]
-        ];
-        document.getElementById("m-stats").innerHTML = stats.map(function (p) {
-          return '<div class="m-stat"><span>' + esc(p[0]) + "</span><b>" + esc(p[1]) + "</b></div>";
-        }).join("");
-        var times = data.points.map(function (p) { return p.t; });
-        window.MiniChart.render(document.getElementById("m-latency"), {
-          type: "line", values: data.points.map(function (p) { return p.latency; }), times: times, range: data.range, unit: "ms"
-        });
-        window.MiniChart.render(document.getElementById("m-uptime"), {
-          type: "bar", values: data.points.map(function (p) { return p.uptime; }), times: times, range: data.range, unit: "%", yMax: 100
-        });
-        var list = document.getElementById("m-incidents");
-        list.innerHTML = data.incidents.length ? data.incidents.map(function (i) {
-          return "<li><span>" + esc(i.start_label) + (i.end_label ? " to " + esc(i.end_label) : "") + "</span>" +
-            '<span class="' + (i.ongoing ? "ongoing" : "") + '">' + (i.ongoing ? "Ongoing · " : "") + esc(i.duration_label) +
-            " · " + esc(i.error_label) + "</span></li>";
-        }).join("") : '<li><span class="muted">No incidents in this range.</span></li>';
-      })
-      .catch(function () {
-        document.getElementById("m-stats").innerHTML = '<p class="muted">Could not load details.</p>';
-      })
-      .then(function () { document.getElementById("m-body").classList.remove("loading"); });
-  }
-
   applyView();
 })();

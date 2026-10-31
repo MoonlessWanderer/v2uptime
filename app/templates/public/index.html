@@ -2,89 +2,42 @@
 {% block title %}{{ data.site.title }}{% endblock %}
 {% block body_class %}public{% endblock %}
 {% block body %}
-<header class="hero">
-  <div class="container hero-inner">
-    <div class="hero-text">
+<div class="wrap">
+  <header class="page-top">
+    <div class="page-top-row">
       <h1><bdi>{{ data.site.title }}</bdi></h1>
-      {% if data.site.description %}<p class="hero-desc"><bdi>{{ data.site.description }}</bdi></p>{% endif %}
-      {% if data.site.location %}
-      <p class="location"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>Test location: <strong><bdi>{{ data.site.location }}</bdi></strong></p>
+      <button class="icon-btn theme-toggle" type="button" aria-label="Toggle color theme" data-theme-toggle>
+        <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+        <svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+    </div>
+    {% if data.site.description %}<p class="fine"><bdi>{{ data.site.description }}</bdi></p>{% endif %}
+  </header>
+
+  <main id="main">
+    <div class="sort-row">
+      <div class="segmented" role="tablist" aria-label="Sort">
+        <button role="tab" type="button" class="seg is-active" data-tab="all" aria-selected="true">All</button>
+        <button role="tab" type="button" class="seg" data-tab="fastest" aria-selected="false">Fastest</button>
+        <button role="tab" type="button" class="seg" data-tab="stable" aria-selected="false">Most stable</button>
+      </div>
+      {% if data.servers|length > 15 %}
+      <label class="search">
+        <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" id="q" placeholder="Search servers…" autocomplete="off" aria-label="Search servers">
+      </label>
       {% endif %}
     </div>
-    <button class="icon-btn theme-toggle" type="button" aria-label="Toggle color theme" data-theme-toggle>
-      <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg>
-      <svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
-    </button>
-  </div>
-</header>
 
-<main class="container" id="main">
-  <div class="toolbar" role="region" aria-label="View and filters">
-    <div class="tabs" role="tablist" aria-label="Sort">
-      <button role="tab" type="button" class="tab is-active" data-tab="all" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg>All</button>
-      <button role="tab" type="button" class="tab" data-tab="fastest" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>Fastest</button>
-      <button role="tab" type="button" class="tab" data-tab="stable" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>Most stable</button>
+    <div id="live">
+      {% include "public/_live.html" %}
     </div>
-    <div class="segmented" role="group" aria-label="Time range" id="range-switch">
-      {% for key, label in ranges.items() %}
-      <a href="?range={{ key }}" class="seg{{ ' is-active' if data.range == key }}" data-range="{{ key }}" aria-pressed="{{ 'true' if data.range == key else 'false' }}">{{ label }}</a>
-      {% endfor %}
-    </div>
-    <label class="search">
-      <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-      <input type="search" id="q" placeholder="Search name, protocol, tag…" autocomplete="off" aria-label="Search">
-    </label>
-    <div class="filters" role="group" aria-label="Status filter">
-      <button type="button" class="filter is-active" data-filter="all">All</button>
-      <button type="button" class="filter f-online" data-filter="online">Online</button>
-      <button type="button" class="filter f-degraded" data-filter="degraded">Degraded</button>
-      <button type="button" class="filter f-offline" data-filter="offline">Down</button>
-    </div>
-  </div>
+    <p class="empty" id="empty-search" hidden>No matching servers.</p>
+  </main>
 
-  <div id="live" aria-live="polite" data-range="{{ data.range }}">
-    {% include "public/_live.html" %}
-  </div>
-  <p class="empty-filter" id="empty-filter" hidden>No servers match this filter.</p>
-</main>
-
-<footer class="site-footer container">
-  <p>This page refreshes automatically every 60 seconds. Status comes from a real connection test.</p>
-  <p>Times are shown in {{ tz_label(settings.tz) }} ({{ settings.tz }})</p>
-</footer>
-
-<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
-
-<div class="modal" id="modal" hidden>
-  <div class="modal-backdrop" data-close></div>
-  <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="m-title">
-    <header class="modal-head">
-      <div>
-        <h2 id="m-title" dir="auto">…</h2>
-        <p class="modal-sub" id="m-sub"></p>
-      </div>
-      <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
-    </header>
-    <div class="segmented" role="group" aria-label="Chart range" id="m-range">
-      {% for key, label in ranges.items() %}<button type="button" class="seg" data-range="{{ key }}">{{ label }}</button>{% endfor %}
-    </div>
-    <div class="modal-body" id="m-body">
-      <div class="m-stats" id="m-stats"></div>
-      <section class="chart-block">
-        <h4>Ping (ms)</h4>
-        <div class="chart"><canvas id="m-latency" aria-label="Ping chart"></canvas></div>
-      </section>
-      <section class="chart-block">
-        <h4>Uptime (%)</h4>
-        <div class="chart"><canvas id="m-uptime" aria-label="Uptime chart"></canvas></div>
-      </section>
-      <section class="chart-block">
-        <h4>Incidents</h4>
-        <ul class="incident-list" id="m-incidents"></ul>
-      </section>
-    </div>
-  </div>
+  <footer class="site-footer fine">Auto-refreshes every 60s · Times are shown in {{ tz_label(settings.tz) }} ({{ settings.tz }})</footer>
 </div>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
 {% endblock %}
 {% block scripts %}
 <script src="{{ static_url('js/time.js') }}" defer></script>

@@ -27,7 +27,6 @@
   {% elif d.kind == "secret" %}
     <label for="f-{{ d.key }}">{{ d.label }}</label>
     <input type="text" id="f-{{ d.key }}" name="{{ d.key }}" value="{{ masked }}" class="ltr mono" autocomplete="off" spellcheck="false" placeholder="123456789:AA...">
-    <span class="help">Shown masked. Enter a new value to replace it.</span>
   {% elif d.kind in ("int", "float") %}
     <label for="f-{{ d.key }}">{{ d.label }}</label>
     <input type="number" id="f-{{ d.key }}" name="{{ d.key }}" value="{{ value }}" class="ltr"

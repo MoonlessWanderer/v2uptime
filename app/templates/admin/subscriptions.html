@@ -2,6 +2,7 @@
 {% block page_title %}Subscriptions{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Subscriptions</h1></div>
+{% include "admin/_tabs.html" %}
 <section class="panel">
   <h2>Add a subscription</h2>
   <form method="post" action="{{ admin_url('/subscriptions/add') }}" class="form-grid">

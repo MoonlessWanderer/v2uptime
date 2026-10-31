@@ -15,7 +15,7 @@ The public page lists each server’s status, ping, and uptime. The admin panel 
 - Add, edit, and remove servers through the Xray API while the process stays up. If a hot reload fails, Xray restarts once and the check cycle that overlapped the restart is discarded.
 - Detects when the monitor’s own internet is down (a direct reference request) and keeps those results out of uptime.
 - Incidents use an N/M rule. Flapping is detected. Incident stats include count, downtime, mean time to recover, and longest outage.
-- Public page: status bars for 24h, 7d, and 30d, Fastest and Most stable views, search, status filters, light and dark theme, refresh every 60 seconds without a full reload.
+- Public page: one status banner, a server list (flag, status, ping, 24h uptime), Fastest and Most stable sorting, and a row that opens 24h/7d/30d uptime, a 24h status bar, the last incident, and a ping chart. Light and dark theme. Refreshes every 60 seconds.
 - Telegram bot with a durable queue. Messages go out directly, or through an online server when `api.telegram.org` is not reachable from the monitor.
 - Fonts, icons, and charts are served by the app. No third-party CDN.
 - One-command install, a management menu, and support for a proxy, mirrors, and an offline archive.

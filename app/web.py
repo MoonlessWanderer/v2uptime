@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
@@ -31,35 +31,6 @@ def admin_url(path: str = "") -> str:
 
 def static_url(path: str) -> str:
     return f"/static/{path}?v={__version__}"
-
-
-def sparkline(values: Iterable[int | None], width: int = 240, height: int = 36) -> dict[str, Any]:
-    """Geometry for an inline SVG sparkline; ``None`` values are failures (gaps)."""
-    values = list(values)
-    if not values:
-        return {"segments": [], "fails": [], "width": width, "height": height}
-    present = [v for v in values if v is not None]
-    top = max(present) if present else 1
-    bottom = min(present) if present else 0
-    span = max(top - bottom, 1)
-    step = width / max(len(values) - 1, 1)
-    pad = 3
-    segments: list[str] = []
-    current: list[str] = []
-    fails: list[float] = []
-    for index, value in enumerate(values):
-        x = round(index * step, 1)
-        if value is None:
-            fails.append(x)
-            if current:
-                segments.append(" ".join(current))
-                current = []
-            continue
-        y = round(pad + (height - 2 * pad) * (1 - (value - bottom) / span), 1)
-        current.append(f"{x},{y}")
-    if current:
-        segments.append(" ".join(current))
-    return {"segments": segments, "fails": fails, "width": width, "height": height}
 
 
 def _coerce_ts(value: Any) -> int | None:
@@ -105,7 +76,7 @@ def time_tag(value: Any, kind: str = "time") -> Markup | str:
 
 
 templates.env.globals.update(
-    admin_url=admin_url, static_url=static_url, settings=settings, version=__version__, sparkline=sparkline,
+    admin_url=admin_url, static_url=static_url, settings=settings, version=__version__,
     flag_emoji=flag_emoji, tz_label=tz_label,
 )
 templates.env.filters.update(

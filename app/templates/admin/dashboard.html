@@ -40,38 +40,27 @@
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2>Xray and check cycle</h2></div>
-    <dl class="kv">
-      <dt>Xray</dt><dd>{% if xray.ready %}<span class="pill pill-ok">Running</span>{% else %}<span class="pill pill-bad">{{ xray.state }}</span>{% endif %}</dd>
-      <dt>Version</dt><dd class="ltr">{{ xray.version or '—' }}</dd>
-      <dt>PID / epoch</dt><dd class="ltr">{{ xray.pid or '—' }} / {{ xray.epoch }}</dd>
-      <dt>Started</dt><dd>{{ xray.started_at|time_tag("datetime") }}</dd>
-      <dt>Restarts / crashes</dt><dd>{{ xray.restarts }} / {{ xray.crashes }}</dd>
-      <dt>Loaded servers</dt><dd>{{ xray.loaded }}</dd>
-      {% if report %}
-      {% set skip_labels = {"xray_missing": "Xray is not installed", "xray_not_ready": "Xray was not ready", "no_servers": "No servers to test"} %}
-      <dt>Last cycle</dt><dd>{{ report.started_at|time_tag("datetime") }} ·
-        {% if report.skipped_reason %}<span class="pill">Skipped: {{ skip_labels.get(report.skipped_reason, report.skipped_reason) }}</span>
-        {% else %}{{ '%.1f'|format(report.duration) }}s ·
-        {{ report.ok }} ok / {{ report.fail }} failed / {{ report.unknown }} unknown
-        {% if report.discarded %}<span class="pill pill-warn">Discarded (Xray restarted)</span>{% endif %}{% endif %}</dd>
-      <dt>Reference check</dt><dd>{% if report.reference_ok is none %}—{% elif report.reference_ok %}<span class="pill pill-ok">OK</span>{% else %}<span class="pill pill-bad">Failed</span>{% endif %}</dd>
-      {% endif %}
-    </dl>
-    {% if xray_log %}<details style="margin-top:12px"><summary>Latest Xray output</summary><pre class="log-box">{{ xray_log|join('\n') }}</pre></details>{% endif %}
+    <p class="status-line">Xray: {% if xray.ready %}<span class="status-dot online"></span>Running{% elif not xray.installed %}<span class="status-dot"></span>Not installed{% else %}<span class="status-dot offline"></span>{{ xray.state }}{% endif %}{% if xray.version %} · {{ xray.version }}{% endif %}{% if xray.started_at %} · up {{ (now - xray.started_at)|duration }}{% endif %}</p>
+    <details>
+      <summary>Details</summary>
+      <dl class="kv">
+        <dt>PID / epoch</dt><dd class="ltr">{{ xray.pid or '—' }} / {{ xray.epoch }}</dd>
+        <dt>Restarts / crashes</dt><dd>{{ xray.restarts }} / {{ xray.crashes }}</dd>
+        <dt>Loaded servers</dt><dd>{{ xray.loaded }}</dd>
+        {% if report %}
+        {% set skip_labels = {"xray_missing": "Xray is not installed", "xray_not_ready": "Xray was not ready", "no_servers": "No servers to test"} %}
+        <dt>Last cycle</dt><dd>{{ report.started_at|time_tag("datetime") }} ·
+          {% if report.skipped_reason %}Skipped: {{ skip_labels.get(report.skipped_reason, report.skipped_reason) }}
+          {% else %}{{ '%.1f'|format(report.duration) }}s · {{ report.ok }} ok / {{ report.fail }} failed / {{ report.unknown }} unknown{% if report.discarded %} · discarded{% endif %}{% endif %}</dd>
+        {% endif %}
+      </dl>
+      {% if xray_log %}<pre class="log-box">{{ xray_log|join('\n') }}</pre>{% endif %}
+    </details>
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2>Telegram queue</h2><a class="btn btn-sm" href="{{ admin_url('/telegram') }}">Settings</a></div>
-    <dl class="kv">
-      <dt>Bot</dt><dd>{% if telegram_enabled %}<span class="pill pill-ok">Enabled</span>{% else %}<span class="pill">Disabled</span>{% endif %}</dd>
-      <dt>Queued</dt><dd>{{ queue.pending }}{% if queue.oldest_pending %} (oldest: {{ queue.oldest_pending|time_tag("ago") }}){% endif %}</dd>
-      <dt>Sent, 24h</dt><dd>{{ queue.sent_24h }}</dd>
-      <dt>Permanently failed</dt><dd>{{ queue.failed }}</dd>
-      <dt>Last sent</dt><dd>{{ queue.last_sent_at|time_tag("datetime") }} {% if queue.last_via %}· <bdi>{{ queue.last_via }}</bdi>{% endif %}</dd>
-      <dt>Last error</dt><dd>{{ queue.last_error or '—' }}</dd>
-      {% if bot_error %}<dt>Command error</dt><dd>{{ bot_error }}</dd>{% endif %}
-    </dl>
+    <p class="status-line">{% if telegram_enabled %}Telegram: <span class="status-dot online"></span>Enabled · Queue: {{ queue.pending }} · Last sent: {{ queue.last_sent_at|time_tag("ago") }}{% else %}Telegram: Disabled{% endif %}</p>
+    {% if queue.last_error or bot_error %}<p class="muted">{{ queue.last_error or bot_error }}</p>{% endif %}
   </section>
 
   <section class="panel">

@@ -3,21 +3,41 @@
 {% block page_title %}Settings{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Settings</h1></div>
+<div class="settings-page">
+{% include "admin/_tabs.html" %}
 <form method="post" action="{{ admin_url('/settings') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
-  {% for key, title, defs in groups %}
-  <section class="panel">
-    <h2>{{ title }}</h2>
-    <div class="form-grid">
-      {% for d in defs %}{{ field(d, values[d.key]) }}{% endfor %}
-    </div>
-  </section>
-  {% endfor %}
-  <div class="alert alert-info">
-    <b>Down</b> starts an incident after N failed checks in a row, and closes it after M successful checks in a row.
-    <b>Degraded</b> means the server is up, but the last check failed, latency is high, or too many recent checks failed.
-    Telegram alerts use the same rules.
+  <div class="settings-panels">
+    <section class="panel" id="general">
+      <h2>General</h2>
+      <div class="form-grid">
+        {% for d in general_main %}{{ field(d, values[d.key]) }}{% endfor %}
+      </div>
+      {% if general_adv %}
+      <details class="advanced">
+        <summary>Advanced settings</summary>
+        <div class="form-grid">
+          {% for d in general_adv %}{{ field(d, values[d.key]) }}{% endfor %}
+        </div>
+      </details>
+      {% endif %}
+    </section>
+    <section class="panel" id="monitoring">
+      <h2>Monitoring</h2>
+      <div class="form-grid">
+        {% for d in monitor_main %}{{ field(d, values[d.key]) }}{% endfor %}
+      </div>
+      {% if monitor_adv %}
+      <details class="advanced">
+        <summary>Advanced settings</summary>
+        <div class="form-grid">
+          {% for d in monitor_adv %}{{ field(d, values[d.key]) }}{% endfor %}
+        </div>
+      </details>
+      {% endif %}
+    </section>
   </div>
   <div class="form-actions"><button class="btn btn-primary" type="submit">Save settings</button></div>
 </form>
+</div>
 {% endblock %}
