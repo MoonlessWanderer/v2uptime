@@ -42,9 +42,33 @@ def init_db(path: str | Path) -> SqliteDatabase:
     database.connect(reuse_if_open=True)
     database.create_tables(ALL_MODELS, safe=True)
     _add_missing_columns(database, ALL_MODELS)
+    _retire_subscriptions(database)
     _drop_retired_settings()
     _migrate_legacy_defaults()
     return database
+
+
+def _retire_subscriptions(database: SqliteDatabase) -> None:
+    """Drop stored subscription links. Servers that came from one stay, as ordinary servers."""
+    tables = set(database.get_tables())
+    if "servers" in tables:
+        columns = {column.name for column in database.get_columns("servers")}
+        if "subscription_id" in columns:
+            database.execute_sql("UPDATE servers SET subscription_id = NULL")
+            database.execute_sql("PRAGMA foreign_keys = OFF")
+            try:
+                database.execute_sql("ALTER TABLE servers DROP COLUMN subscription_id")
+            except Exception:
+                log.info("migration: subscription_id left unused; the model no longer reads it")
+            finally:
+                database.execute_sql("PRAGMA foreign_keys = ON")
+    if "subscriptions" in set(database.get_tables()):
+        database.execute_sql("PRAGMA foreign_keys = OFF")
+        try:
+            database.execute_sql("DROP TABLE subscriptions")
+        finally:
+            database.execute_sql("PRAGMA foreign_keys = ON")
+        log.info("migration: removed subscriptions")
 
 
 def _drop_retired_settings() -> None:

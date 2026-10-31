@@ -13,12 +13,12 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-from peewee import JOIN, fn
+from peewee import fn
 from starlette.datastructures import FormData, UploadFile
 
 from app import __version__
 from app.db import run_db
-from app.models import Admin, Check, Incident, Server, Subscription
+from app.models import Admin, Check, Incident, Server
 from app.security import (
     client_ip,
     csrf_token,
@@ -33,12 +33,12 @@ from app.services import backup as backup_service
 from app.services import servers as server_service
 from app.services.checker import error_label
 from app.services.control import ControlError
-from app.services.parser import LinkParseError, parse_many
+from app.services import importer
+from app.services.parser import LinkParseError
 from app.services.settings import (
     ADVANCED_KEYS, BY_KEY, DEFINITIONS, SettingError, mask_secret, settings, validate,
 )
 from app.services.stats import RANGES, incident_stats
-from app.services.subscriptions import validate_url
 from app.services.telegram.outbox_worker import queue_stats
 from app.timeutil import DAY, now_ts
 from app.web import ADMIN_INTERNAL_PREFIX, admin_url, render
@@ -174,8 +174,7 @@ async def dashboard(request: Request):
 def _server_rows(svc) -> list[dict[str, Any]]:
     metrics = svc.stats.server_metrics()
     rows = []
-    for server in Server.select(Server, Subscription).join(Subscription, JOIN.LEFT_OUTER).order_by(
-            Server.sort_order, Server.id):
+    for server in Server.select().order_by(Server.sort_order, Server.id):
         m = metrics.get(server.id)
         rows.append({
             "s": server, "status": svc.stats.current_status(server.id) if server.is_active else "unknown",
@@ -196,16 +195,21 @@ async def servers_page(request: Request):
 async def servers_add(request: Request):
     await require_admin(request)
     form = await checked_form(request)
-    result = await run_db(server_service.add_links, str(form.get("links", "")), _bool(form, "is_public"),
-                          str(form.get("tags", "")))
-    if result.created:
-        flash(request, "success", f"Added {len(result.created)} servers.")
+    prepared = await importer.prepare(str(form.get("links", "")), services(request).proxy_pool)
+    if prepared.too_many:
+        flash(request, "error",
+              f"At most {importer.MAX_SUBSCRIPTION_LINKS} subscription links can be added at once.")
+        return redirect("/servers")
+    created: list[int] = []
+    if prepared.to_add:
+        created = await run_db(importer.commit, prepared.to_add, _bool(form, "is_public"), str(form.get("tags", "")))
         await services(request).after_servers_changed()
-    if result.duplicates:
-        flash(request, "warn", "Already exists (not added): " + ", ".join(result.duplicates[:10]))
-    for line, excerpt, message in result.errors[:10]:
-        flash(request, "error", f"Line {line}: {message} — {excerpt}")
-    if not (result.created or result.duplicates or result.errors):
+    message = importer.result_message(prepared, len(created))
+    if message:
+        flash(request, "success" if created else "warn", message)
+    for line, excerpt, error in prepared.share_errors[:10]:
+        flash(request, "error", f"Line {line}: {error} — {excerpt}")
+    if not (created or prepared.duplicates or prepared.share_errors or prepared.failed):
         flash(request, "error", "No links were entered.")
     return redirect("/servers")
 
@@ -214,11 +218,42 @@ async def servers_add(request: Request):
 async def servers_preview(request: Request):
     await require_admin(request)
     body = await checked_json(request)
-    bulk = parse_many(str(body.get("links", "")))
+    prepared = await importer.prepare(str(body.get("links", "")), services(request).proxy_pool)
+    if prepared.too_many:
+        return {"valid": [], "invalid": [], "subscriptions": [],
+                "error": f"At most {importer.MAX_SUBSCRIPTION_LINKS} subscription links can be added at once."}
     return {
-        "valid": [{"name": link.default_name, "protocol": link.protocol.upper()} for link in bulk.links],
-        "invalid": [{"line": line, "message": message} for line, _excerpt, message in bulk.errors],
+        "valid": [{"name": link.default_name, "protocol": link.protocol.upper()} for link in prepared.share_valid],
+        "invalid": [{"line": line, "message": message} for line, _excerpt, message in prepared.share_errors],
+        "subscriptions": [{
+            "host": item.host,
+            "url": None if item.error else item.url,
+            "configs": item.configs,
+            "new": item.new,
+            "duplicates": item.duplicates,
+            "invalid": item.invalid,
+            "error": item.error,
+        } for item in prepared.subscriptions],
     }
+
+
+@router.post("/servers/bulk")
+async def servers_bulk(request: Request):
+    await require_admin(request)
+    body = await checked_json(request)
+    action = str(body.get("action", ""))
+    if action not in ("delete", "public", "hidden"):
+        raise HTTPException(status_code=400, detail="Unknown action.")
+    ids: list[int] = []
+    for item in body.get("ids") or []:
+        try:
+            ids.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    changed, removed = await run_db(server_service.bulk_apply, action, ids)
+    if changed:
+        await services(request).after_servers_changed(removed if action == "delete" else [])
+    return {"ok": True, "changed": changed}
 
 
 @router.post("/servers/reorder")
@@ -342,90 +377,11 @@ async def server_test(request: Request, server_id: int):
             "detail": result.detail if not result.ok else None}
 
 
-# ---------------------------------------------------------- subscriptions
-
 @router.get("/subscriptions")
-async def subscriptions_page(request: Request):
-    admin = await require_admin(request)
-
-    def load():
-        subs = list(Subscription.select().order_by(Subscription.id))
-        counts = {sid: n for sid, n in Server.select(Server.subscription, fn.COUNT(Server.id))
-                  .where(Server.subscription.is_null(False)).group_by(Server.subscription).tuples()}
-        return subs, counts
-
-    subs, counts = await run_db(load)
-    return page(request, "subscriptions.html", admin, "servers", subs=subs, counts=counts,
-                section="servers", tab="subscriptions")
-
-
-@router.post("/subscriptions/add")
-async def subscription_add(request: Request):
+async def subscriptions_gone(request: Request):
+    """Old bookmarks land on the server list. Subscription links are not stored anymore."""
     await require_admin(request)
-    form = await checked_form(request)
-    try:
-        url = validate_url(str(form.get("url", "")))
-        interval = max(10, min(int(form.get("interval_minutes") or 360), 10080))
-    except ValueError as exc:
-        flash(request, "error", str(exc) if "Subscription" in str(exc) else "Invalid sync interval.")
-        return redirect("/subscriptions")
-    sub = await run_db(Subscription.create, name=str(form.get("name", ""))[:200], url=url, interval_minutes=interval,
-                       auto_sync=_bool(form, "auto_sync"), make_public=_bool(form, "make_public"))
-    await _sync_and_flash(request, sub.id)
-    return redirect("/subscriptions")
-
-
-async def _sync_and_flash(request: Request, sub_id: int) -> None:
-    try:
-        r = await services(request).subscriptions.sync(sub_id)
-        flash(request, "success", f"Sync finished ({r.via}): {r.added} added, {r.updated} updated, "
-                                  f"{len(r.deactivated)} deactivated, {len(r.errors)} invalid links.")
-    except (ValueError, LinkParseError) as exc:
-        flash(request, "error", str(exc))
-
-
-@router.post("/subscriptions/{sub_id}/sync")
-async def subscription_sync(request: Request, sub_id: int):
-    await require_admin(request)
-    await checked_form(request)
-    await _sync_and_flash(request, sub_id)
-    return redirect("/subscriptions")
-
-
-@router.post("/subscriptions/{sub_id}/edit")
-async def subscription_edit(request: Request, sub_id: int):
-    await require_admin(request)
-    form = await checked_form(request)
-    try:
-        url = validate_url(str(form.get("url", "")))
-        interval = max(10, min(int(form.get("interval_minutes") or 360), 10080))
-    except ValueError as exc:
-        flash(request, "error", str(exc))
-        return redirect("/subscriptions")
-    await run_db(lambda: Subscription.update(
-        name=str(form.get("name", ""))[:200], url=url, interval_minutes=interval, auto_sync=_bool(form, "auto_sync"),
-        make_public=_bool(form, "make_public")).where(Subscription.id == sub_id).execute())
-    flash(request, "success", "Subscription saved.")
-    return redirect("/subscriptions")
-
-
-@router.post("/subscriptions/{sub_id}/delete")
-async def subscription_delete(request: Request, sub_id: int):
-    await require_admin(request)
-    form = await checked_form(request)
-    delete_servers = _bool(form, "delete_servers")
-
-    def remove() -> list[int]:
-        ids = [s.id for s in Server.select(Server.id).where(Server.subscription == sub_id)]
-        if delete_servers:
-            Server.delete().where(Server.id.in_(ids)).execute()
-        Subscription.delete_by_id(sub_id)
-        return ids if delete_servers else []
-
-    removed = await run_db(remove)
-    await services(request).after_servers_changed(removed)
-    flash(request, "success", "Subscription deleted" + (f" along with {len(removed)} servers." if removed else "."))
-    return redirect("/subscriptions")
+    return redirect("/servers")
 
 
 # -------------------------------------------------------------- incidents
@@ -623,7 +579,7 @@ async def backup_import(request: Request):
     if form.get("mode") == "replace":
         await run_db(svc.incidents.restore)
     await svc.after_servers_changed()
-    flash(request, "success", f"Import finished: {summary['servers']} servers, {summary['subscriptions']} subscriptions, "
+    flash(request, "success", f"Import finished: {summary['servers']} servers, "
                               f"{summary['settings']} settings ({summary['skipped']} skipped).")
     for error in summary["errors"][:10]:
         flash(request, "warn", error)

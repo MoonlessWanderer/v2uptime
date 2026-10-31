@@ -2,7 +2,6 @@
 {% block page_title %}Servers{% endblock %}
 {% block content %}
 <div class="page-head"><h1>Servers</h1><span class="muted">{{ rows|length }} servers · Drag rows, or use the up and down buttons, to reorder.</span></div>
-{% include "admin/_tabs.html" %}
 
 <section class="panel">
   <h2>Add servers</h2>
@@ -10,7 +9,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <div class="field full">
       <label for="links" class="muted">Links</label>
-      <textarea id="links" name="links" class="mono" rows="8" placeholder="Paste share links or subscription content, one per line" required></textarea>
+      <textarea id="links" name="links" class="mono" rows="8" placeholder="Paste share links, subscription links (https://…) or subscription content, one per line" required></textarea>
     </div>
     <input type="hidden" name="is_public" value="1">
     <div id="link-preview" class="full" hidden></div>
@@ -19,16 +18,26 @@
 </section>
 
 <section class="panel">
+  <div id="bulk-bar" class="bulk-bar" hidden>
+    <span id="bulk-count">0 selected</span>
+    <button type="button" class="btn btn-sm" data-bulk="public">Make public</button>
+    <button type="button" class="btn btn-sm" data-bulk="hidden">Make hidden</button>
+    <button type="button" class="btn btn-sm btn-danger" data-bulk="delete">Delete</button>
+    <button type="button" class="btn btn-sm" data-bulk="clear">Clear</button>
+  </div>
   <div class="table-wrap">
   <table class="table" id="server-table">
-    <thead><tr><th></th><th>Name</th><th>Status</th><th>Protocol</th><th class="num">Ping</th><th class="num">Uptime 24h</th><th class="num">Local port</th><th>Visibility</th><th></th></tr></thead>
+    <thead><tr>
+      <th class="check-col"><input type="checkbox" id="check-all" class="row-check" aria-label="Select all"></th>
+      <th></th><th>Name</th><th>Status</th><th>Protocol</th><th class="num">Ping</th><th class="num">Uptime 24h</th><th class="num">Local port</th><th>Visibility</th><th></th>
+    </tr></thead>
     <tbody>
     {% for row in rows %}{% set s = row.s %}
       <tr data-id="{{ s.id }}" draggable="true">
+        <td class="check-col"><input type="checkbox" class="row-check" data-id="{{ s.id }}" aria-label="Select {{ s.name }}"></td>
         <td class="drag-handle" title="Drag to reorder"><svg class="ic"><use href="#i-grip"/></svg></td>
         <td>
           <a href="{{ admin_url('/servers/' ~ s.id) }}"><strong><bdi>{{ s.name }}</bdi></strong></a>
-          {% if s.subscription %}<br><small class="muted">Sub: <bdi>{{ s.subscription.name or s.subscription.id }}</bdi></small>{% endif %}
           {% if s.xray_error %}<br><small class="pill pill-bad" title="{{ s.xray_error }}">Rejected by Xray</small>{% endif %}
           {% if s.tags %}<br><small class="muted" dir="auto"><bdi>{{ s.tags }}</bdi></small>{% endif %}
         </td>
@@ -60,7 +69,7 @@
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="9" class="muted">No servers yet.</td></tr>
+      <tr><td colspan="10" class="muted">No servers yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>

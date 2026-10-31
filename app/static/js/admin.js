@@ -87,6 +87,7 @@
         .catch(function () { toast("Could not save the order"); });
     };
     tbody.addEventListener("dragstart", function (e) {
+      if (e.target.closest("input, button, a")) { e.preventDefault(); return; }
       dragged = e.target.closest("tr[data-id]");
       if (!dragged) return;
       dragged.classList.add("is-dragging");
@@ -121,6 +122,62 @@
       else return;
       saveOrder();
     });
+
+    var bar = document.getElementById("bulk-bar");
+    var count = document.getElementById("bulk-count");
+    var checkAll = document.getElementById("check-all");
+    var selected = function () {
+      return Array.prototype.map.call(tbody.querySelectorAll("tr[data-id]:not([hidden]) .row-check:checked"), function (box) {
+        return Number(box.getAttribute("data-id"));
+      });
+    };
+    var refreshBar = function () {
+      var ids = selected();
+      if (bar) bar.hidden = ids.length === 0;
+      if (count) count.textContent = ids.length + " selected";
+      if (checkAll) {
+        var boxes = tbody.querySelectorAll("tr[data-id]:not([hidden]) .row-check");
+        checkAll.checked = boxes.length > 0 && ids.length === boxes.length;
+        checkAll.indeterminate = ids.length > 0 && ids.length < boxes.length;
+      }
+    };
+    tbody.addEventListener("change", function (e) {
+      if (e.target.classList.contains("row-check")) refreshBar();
+    });
+    if (checkAll) {
+      checkAll.addEventListener("change", function () {
+        tbody.querySelectorAll("tr[data-id]:not([hidden]) .row-check").forEach(function (box) {
+          box.checked = checkAll.checked;
+        });
+        refreshBar();
+      });
+    }
+    if (bar) {
+      bar.addEventListener("click", function (e) {
+        var action = e.target.closest("[data-bulk]");
+        if (!action) return;
+        var kind = action.getAttribute("data-bulk");
+        if (kind === "clear") {
+          tbody.querySelectorAll(".row-check").forEach(function (box) { box.checked = false; });
+          refreshBar();
+          return;
+        }
+        var ids = selected();
+        if (!ids.length) return;
+        if (kind === "delete") {
+          if (ids.length > 20) {
+            var typed = window.prompt("Delete " + ids.length + " servers and their history? This cannot be undone. Type " + ids.length + " to confirm.");
+            if (typed !== String(ids.length)) return;
+          } else if (!window.confirm("Delete " + ids.length + " servers and their history? This cannot be undone.")) {
+            return;
+          }
+        }
+        action.disabled = true;
+        post(base + "/servers/bulk", { action: kind, ids: ids })
+          .then(function () { location.reload(); })
+          .catch(function () { action.disabled = false; toast("Could not update the servers"); });
+      });
+    }
   }
 
   /* telegram test */
@@ -157,6 +214,19 @@
         if (!text) { preview.hidden = true; preview.innerHTML = ""; return; }
         post(base + "/servers/preview", { links: linkBox.value }).then(function (r) {
           var html = "";
+          if (r.error) html += "<p class=\"alert alert-error\">" + esc(r.error) + "</p>";
+          if (r.subscriptions && r.subscriptions.length) {
+            html += "<ul>";
+            r.subscriptions.forEach(function (item) {
+              if (item.error) {
+                html += "<li>" + esc(item.host) + ": could not fetch: " + esc(item.error) + "</li>";
+              } else {
+                html += "<li>" + esc(item.url) + " → " + item.configs + " configs (" + item.new +
+                  " new, " + item.duplicates + " duplicates, " + item.invalid + " invalid)</li>";
+              }
+            });
+            html += "</ul>";
+          }
           if (r.valid && r.valid.length) {
             html += "<p><strong>Valid (" + r.valid.length + ")</strong></p><ul>";
             r.valid.forEach(function (item) {

@@ -128,10 +128,12 @@ def test_login_success_and_dashboard(client, seeded):
     assert response.status_code == 303 and response.headers["location"] == "/admin/"
     dashboard = client.get("/admin")
     assert dashboard.status_code == 200 and "Dashboard" in dashboard.text
-    for path in ("/admin/servers", "/admin/subscriptions", "/admin/incidents", "/admin/settings",
+    for path in ("/admin/servers", "/admin/incidents", "/admin/settings",
                  "/admin/telegram", "/admin/password", "/admin/backup", f"/admin/servers/{seeded[0].id}",
                  f"/admin/servers/{seeded[0].id}/edit"):
         assert client.get(path).status_code == 200, path
+    gone = client.get("/admin/subscriptions", follow_redirects=False)
+    assert gone.status_code == 303 and gone.headers["location"].endswith("/servers")
     history = client.get(f"/admin/servers/{seeded[1].id}/history.json?range=7d")
     assert history.status_code == 200  # hidden servers are visible to the admin
 
@@ -226,7 +228,7 @@ def test_rendered_pages_and_api_are_english(client, seeded):
     _assert_latin("public", client.get("/").text)
     _assert_latin("login", client.get("/admin/login").text)
     login(client)
-    for path in ("/admin", "/admin/servers", "/admin/subscriptions", "/admin/incidents", "/admin/settings",
+    for path in ("/admin", "/admin/servers", "/admin/incidents", "/admin/settings",
                  "/admin/telegram", "/admin/password", "/admin/backup",
                  f"/admin/servers/{visible.id}", f"/admin/servers/{visible.id}/edit"):
         response = client.get(path)

@@ -6,12 +6,12 @@ v2uptime checks V2Ray share links by connecting through Xray, on a timer (60 sec
 
 One Xray process serves every server. Each server gets a local SOCKS inbound. A check sends two requests to the configured test URL over one keep-alive connection through that inbound. The first (cold) request opens the connection: the tunnel to the server (including TLS or REALITY) and the connection to the test host. It decides the result; a 2xx response is a success. Its time is stored as the **connect time**. The second (warm) request runs on the connection that is already open. Its time is the **Ping**: the round trip of one request through the server, the same idea as the delay in 3x-ui. It is not an ICMP ping.
 
-The public page lists each server’s status, ping, and uptime. The admin panel adds servers, subscriptions, incidents, Telegram, and settings. Share links, addresses, and ports are not shown on the public page, in the public API, or in Telegram messages.
+The public page lists each server’s status, ping, and uptime. The admin panel adds servers, incidents, Telegram, and settings. Share links, addresses, and ports are not shown on the public page, in the public API, or in Telegram messages.
 
 ## Features
 
 - Protocols: `vless`, `vmess`, `trojan`, `ss`. Transports: `tcp` (optional HTTP header), `ws`, `grpc`, `httpupgrade`, `xhttp`, `kcp`. Security: `none`, `tls`, `reality`.
-- Add one link, many links (one per line), or a subscription that syncs on a schedule.
+- Add one link, many links (one per line), a subscription URL (fetched once; nothing is synced later), or pasted subscription content.
 - Add, edit, and remove servers through the Xray API while the process stays up. If a hot reload fails, Xray restarts once and the check cycle that overlapped the restart is discarded.
 - Detects when the monitor’s own internet is down (a direct reference request) and keeps those results out of uptime.
 - Incidents use an N/M rule. Flapping is detected. Incident stats include count, downtime, mean time to recover, and longest outage.
@@ -195,9 +195,14 @@ Status, used by the public page, incidents, and Telegram:
 - Monitor network outage: if every server fails in the same cycle and the reference URL (default `https://www.aparat.com`, no proxy) also fails, that cycle is stored as `unknown` and a single outage alert is sent (and a restore alert later).
 - Flapping: more than 4 transitions in 30 minutes sends one warning and pauses per-server down/up messages until the server stays unchanged for half the window. A final message then reports the current status.
 - A manual **Test now** is shown in the panel and is not stored in the stats.
-- Configs removed from a subscription are deactivated, not deleted, so their history remains.
 - Storage: SQLite in WAL mode with `busy_timeout`. Each cycle is written in one transaction. Raw rows are kept for the retention window; hourly rows cover 7d and 30d, plus raw rows not yet rolled up. Hourly aggregation is idempotent and catches up after downtime.
 - JSON logs write `ts` as UTC with milliseconds, ending in `Z` (`2026-10-31T14:58:05.123Z`), regardless of the system timezone. Displayed times use the timezone setting (`UTC+03:30` for `Asia/Tehran`).
+
+### Servers
+
+The add form takes share links (`vless://`, `vmess://`, `trojan://`, `ss://`), subscription URLs (`https://…`), or pasted subscription content, one per line. A subscription URL is downloaded once (directly, then through up to three online servers) and its configs are saved as ordinary servers. The URL is not stored, and it is not fetched again. At most 10 subscription URLs are accepted in one submit. Addresses that resolve to loopback or link-local (`127.0.0.0/8`, `::1`, `169.254.0.0/16`, `localhost`) are rejected. The preview shows how many configs are new, duplicate, or invalid. A failed download names the host only, not the path.
+
+On the server list, checkboxes select rows (Select all covers the rows on screen). **Make public** and **Make hidden** set that flag. **Delete** asks for confirmation, and for more than 20 servers the count has to be typed. One request applies the change, and Xray is updated once.
 
 The app listens on `127.0.0.1` only (nginx in front). It runs as one worker because the scheduler lives in the process. Session cookies are `HttpOnly`, `Secure` when the site is HTTPS, and `SameSite=Lax`. Forms and JSON requests need a CSRF token. Login is limited to 5 failures per 15 minutes for each IP and username. Passwords are bcrypt. A random `secret_key` is written at install. Responses send CSP and `X-Frame-Options`.
 

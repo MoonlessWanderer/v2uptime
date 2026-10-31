@@ -18,7 +18,6 @@ from app.services.monitor import Monitor
 from app.services.proxy_pool import ProxyPool
 from app.services.stats import StatsService
 from app.services.status import RECENT_WINDOW, LiveRegistry, seed_rows
-from app.services.subscriptions import SubscriptionService
 from app.services.telegram.bot_commands import BotPoller
 from app.services.telegram.notifier import TelegramNotifier
 from app.services.telegram.outbox_worker import OutboxWorker
@@ -44,7 +43,6 @@ class Services:
         self.monitor = Monitor(self.live, self.incidents, self.stats, self.notifier.handle_event)
         self.checker = Checker(self.xray, self.monitor.handle_cycle)
         self.aggregator = Aggregator(on_done=self.stats.invalidate)
-        self.subscriptions = SubscriptionService(self.proxy_pool, self.after_servers_changed)
         self.control = Control(BASE_DIR)
         self.tasks: list[asyncio.Task[None]] = []
         self.started_at: int | None = None
@@ -65,7 +63,6 @@ class Services:
             "outbox": self.outbox.run_forever,
             "bot": self.bot.run_forever,
             "reports": self.notifier.reports_forever,
-            "subscriptions": self.subscriptions.run_forever,
             "xray-supervisor": self.xray.supervise_forever,
         }
         self.tasks = [asyncio.create_task(self._supervised(name, job), name=name) for name, job in jobs.items()]

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from peewee import fn
 
 from app.db import db
-from app.models import Server
+from app.models import Check, HourlyStat, Incident, Server
 from app.services.parser import LinkParseError, ParsedLink, parse_link, parse_many
 from app.timeutil import now_ts
 
@@ -43,9 +43,9 @@ def apply_parsed(server: Server, parsed: ParsedLink) -> None:
 
 
 def create_from_parsed(parsed: ParsedLink, *, is_public: bool = True, tags: str = "",
-                       subscription_id: int | None = None, sort_order: int | None = None) -> Server:
+                       sort_order: int | None = None) -> Server:
     server = Server(name=parsed.default_name, country=parsed.country, tags=normalize_tags(tags),
-                    is_public=is_public, subscription=subscription_id,
+                    is_public=is_public,
                     sort_order=sort_order if sort_order is not None else _next_sort_order())
     apply_parsed(server, parsed)
     server.save()
@@ -116,9 +116,35 @@ def delete_server(server_id: int) -> None:
     Server.delete_by_id(server_id)
 
 
+def bulk_apply(action: str, ids: list[int]) -> tuple[int, list[int]]:
+    """Apply one action to the given servers in a single transaction.
+
+    Unknown ids are ignored. Returns ``(changed, removed_ids)``. ``removed_ids``
+    is every deleted server, so the caller can drop them from Xray once.
+    """
+    wanted = list(dict.fromkeys(ids))
+    if action not in ("delete", "public", "hidden") or not wanted:
+        return 0, []
+    found = list(Server.select().where(Server.id.in_(wanted)))
+    found_ids = [server.id for server in found]
+    if not found_ids:
+        return 0, []
+    with db.atomic():
+        if action == "delete":
+            Check.delete().where(Check.server.in_(found_ids)).execute()
+            HourlyStat.delete().where(HourlyStat.server.in_(found_ids)).execute()
+            Incident.delete().where(Incident.server.in_(found_ids)).execute()
+            changed = Server.delete().where(Server.id.in_(found_ids)).execute()
+            return changed, found_ids
+        value = action == "public"
+        changed = (Server.update(is_public=value, updated_at=now_ts())
+                   .where(Server.id.in_(found_ids), Server.is_public != value).execute())
+        return changed, []
+
+
 def clear_xray_error(server_id: int) -> None:
     Server.update(xray_error=None).where(Server.id == server_id).execute()
 
 
 __all__ = ["AddResult", "LinkParseError", "add_links", "apply_parsed", "create_from_parsed", "update_server",
-           "set_flag", "reorder", "delete_server", "clear_xray_error", "normalize_tags"]
+           "set_flag", "reorder", "delete_server", "bulk_apply", "clear_xray_error", "normalize_tags"]

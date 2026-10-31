@@ -40,21 +40,6 @@ class Admin(BaseModel):
         table_name = "admins"
 
 
-class Subscription(BaseModel):
-    name = CharField(max_length=200, default="")
-    url = TextField()
-    interval_minutes = IntegerField(default=360)
-    auto_sync = BooleanField(default=True)
-    make_public = BooleanField(default=True)
-    last_sync = IntegerField(null=True)
-    last_error = TextField(null=True)
-    last_count = IntegerField(default=0)
-    created_at = IntegerField(default=now_ts)
-
-    class Meta:
-        table_name = "subscriptions"
-
-
 class Server(BaseModel):
     name = CharField(max_length=200)
     raw_link = TextField()
@@ -71,7 +56,6 @@ class Server(BaseModel):
     is_public = BooleanField(default=True)
     sort_order = IntegerField(default=0, index=True)
     socks_port = IntegerField(null=True, unique=True)  # stable local SOCKS inbound port
-    subscription = ForeignKeyField(Subscription, null=True, backref="servers", on_delete="SET NULL")
     xray_error = TextField(null=True)  # set when Xray rejects this outbound
     created_at = IntegerField(default=now_ts)
     updated_at = IntegerField(default=now_ts)
@@ -170,7 +154,6 @@ class TelegramOutbox(BaseModel):
 
 ALL_MODELS: list[type[BaseModel]] = [
     Admin,
-    Subscription,
     Server,
     Check,
     HourlyStat,

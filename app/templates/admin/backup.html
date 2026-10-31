@@ -6,7 +6,7 @@
 <div class="grid-2">
   <section class="panel">
     <h2>Export</h2>
-    <p class="muted">A JSON file with servers (including share links), subscriptions, and settings, including the bot token. Keep the file private.</p>
+    <p class="muted">A JSON file with servers (including share links) and settings, including the bot token. Keep the file private. Older files that still contain subscriptions are accepted; those servers are imported as ordinary servers.</p>
     <a class="btn btn-primary" href="{{ admin_url('/backup/export') }}"><svg class="ic"><use href="#i-archive"/></svg>Download backup</a>
     <p class="help muted" style="margin-top:12px">For a full database backup, including history, use “Backup and restore database” in the <code>v2uptime</code> menu.</p>
   </section>

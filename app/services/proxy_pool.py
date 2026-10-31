@@ -1,9 +1,9 @@
 """Use monitored servers as outbound proxies for the panel itself.
 
-The panel runs inside Iran, where Telegram / GitHub / subscription hosts may
+The panel runs inside Iran, where Telegram, GitHub, and subscription hosts may
 be unreachable directly.  Every server's local SOCKS inbound in Xray is a
-working tunnel, so other parts (Telegram, subscription sync, updates via
-``/internal/proxy``) pick one with :meth:`ProxyPool.candidates`.
+working tunnel, so other parts (Telegram, one-time subscription fetches, updates
+via ``/internal/proxy``) pick one with :meth:`ProxyPool.candidates`.
 
 Order: preferred server (if online) → online servers by highest stability
 score, then lowest latency → degraded servers as a last resort.
