@@ -37,8 +37,6 @@
 
   // ------------------------------------------------------------ sort + search
   function applyView() {
-    document.body.classList.toggle("view-fastest", state.tab === "fastest");
-    document.body.classList.toggle("view-stable", state.tab === "stable");
     document.querySelectorAll("[data-tab]").forEach(function (el) {
       var on = el.getAttribute("data-tab") === state.tab;
       el.classList.toggle("is-active", on);

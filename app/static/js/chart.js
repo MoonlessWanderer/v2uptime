@@ -7,6 +7,19 @@
 
   function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
+  function uiFamily() { return getComputedStyle(document.body).fontFamily; }
+
+  /* Axis labels and the canvas tooltip use the page font at --fs-xs. */
+  function applyFont(chart, ctx) {
+    chart.fontFamily = uiFamily();
+    var size = cssVar("--fs-xs") || "12px";
+    ctx.font = size + " " + chart.fontFamily;
+  }
+
+  function whenFontsReady(redraw) {
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+  }
+
   function axisText(cfg, index) {
     var iso = cfg.times && cfg.times[index];
     if (iso && window.UptimeTime) {
@@ -44,6 +57,7 @@
     window.addEventListener("resize", this._resize);
     document.addEventListener("themechange", this._resize);
     this.draw();
+    whenFontsReady(function () { if (self.canvas.isConnected) self.draw(); });
   }
 
   Chart.prototype.destroy = function () {
@@ -98,7 +112,7 @@
     this.yMax = cfg.yMax || niceMax(Math.max.apply(null, present.concat([1])) * 1.1);
     var text = cssVar("--muted"), grid = cssVar("--border"), color = cfg.color || cssVar("--accent");
     ctx.clearRect(0, 0, this.w, this.h);
-    ctx.font = "11px system-ui, Segoe UI, sans-serif";
+    applyFont(this, ctx);
     ctx.fillStyle = text;
     ctx.strokeStyle = grid;
     ctx.lineWidth = 1;
@@ -170,7 +184,7 @@
       }
       var line1 = tipTime(cfg, this.hover);
       var line2 = hv === null || hv === undefined ? "No data" : (cfg.unit === "%" ? hv.toFixed(2).replace(/\.?0+$/, "") : Math.round(hv)) + " " + (cfg.unit || "");
-      ctx.font = "12px system-ui, Segoe UI, sans-serif";
+      applyFont(this, ctx);
       var tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 16;
       var tx = Math.min(Math.max(hx - tw / 2, 2), this.w - tw - 2);
       ctx.fillStyle = cssVar("--text");
@@ -231,6 +245,7 @@
     window.addEventListener("resize", this._redraw);
     document.addEventListener("themechange", this._redraw);
     this.draw();
+    whenFontsReady(this._redraw);
   }
 
   Timeline.prototype.destroy = function () {
@@ -261,7 +276,7 @@
     var yAt = function (v) { return top + (plotH - top) * (1 - v / yMax); };
 
     var muted = cssVar("--muted"), grid = cssVar("--border"), color = cfg.color || cssVar("--accent");
-    ctx.font = "10px system-ui, Segoe UI, sans-serif";
+    applyFont(this, ctx);
     ctx.lineWidth = 1;
     for (var g = step; g <= yMax + 0.001; g += step) {  // grid lines with their label inside, above the line
       var gy = Math.round(yAt(g)) + 0.5;
@@ -289,12 +304,12 @@
       ctx.globalAlpha = 0.14; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
     });
     if (!values.length) {
-      ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "12px system-ui, sans-serif";
+      ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; applyFont(this, ctx);
       ctx.fillText("No ping data", w / 2, plotH / 2);
     }
 
     // time labels under the plot; drop the ones that would collide
-    ctx.font = "11px system-ui, Segoe UI, sans-serif"; ctx.fillStyle = muted; ctx.textBaseline = "top";
+    applyFont(this, ctx); ctx.fillStyle = muted; ctx.textBaseline = "top";
     var placed = [];
     timeTicks(bars, cfg.range, start, end).forEach(function (tick) {
       var tw = ctx.measureText(tick.text).width, x = xAt(tick.t);

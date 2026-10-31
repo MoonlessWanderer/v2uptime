@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The public page and the admin panel use Vazirmatn at two weights (400 and 600) and one size scale. Sort tabs no longer recolor ping or uptime.
 - Persian numbers on the public page keep their order. An open card shows the average ping as `260 ms`, and the footer timezone, parentheses included, stays one left-to-right run. Resolving a subscription link no longer blocks the check loop.
 - The public status page can be shown in English or Persian. The default is a setting; a visitor's choice is remembered for a year. Dates and digits stay as they were.
 - Config domains can be resolved with a primary and a secondary DNS (Settings → Monitoring). Fake answers in `10.10.34.0/24` are dropped. A failed check of a domain server is stored as DNS error, or DNS blocked when only a filtered answer comes back. This needs Xray 25.6.8 or newer.

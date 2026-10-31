@@ -45,6 +45,12 @@ MAX_BYTES = 300 * 1024
 UUID = "d342d11e-d424-4583-b36e-524ab1f0afa4"
 PBK = "SbVKOEMjK0sIlbwg4akyBg5mL5KZwwB-ed4eEE7YnRc"
 FLAG_FONT = "TwemojiCountryFlags.woff2"
+VAZIR = ROOT / "app" / "static" / "fonts" / "Vazirmatn-Variable.woff2"
+# Same files install.sh downloads. The first that answers is enough.
+VAZIR_URLS = (
+    "https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn%5Bwght%5D.woff2",
+    "https://raw.githubusercontent.com/rastikerdar/vazirmatn/v33.003/fonts/webfonts/Vazirmatn%5Bwght%5D.woff2",
+)
 
 # name, share link (example hosts only), ping ms, connect ms
 SERVERS = [
@@ -221,9 +227,36 @@ def save_jpeg(page, path: Path, **kwargs) -> None:
     print(f"  {path.relative_to(ROOT)}  {path.stat().st_size // 1024} KB  (quality {quality})")
 
 
+def ensure_vazirmatn() -> None:
+    """Download Vazirmatn when the repo does not have it, so screenshots are not fallback text."""
+    if VAZIR.is_file() and VAZIR.stat().st_size > 0:
+        return
+    VAZIR.parent.mkdir(parents=True, exist_ok=True)
+    for url in VAZIR_URLS:
+        try:
+            with urlopen(url, timeout=30) as response:
+                data = response.read()
+        except OSError:
+            continue
+        if data.startswith(b"wOF2"):
+            VAZIR.write_bytes(data)
+            return
+    raise SystemExit(
+        "Could not download Vazirmatn to app/static/fonts/Vazirmatn-Variable.woff2. "
+        "Screenshots stop here instead of using a fallback font. "
+        "The URLs are the ones install.sh uses."
+    )
+
+
 def settle(page) -> None:
     page.wait_for_load_state("networkidle")
     page.evaluate("document.fonts.ready.then(() => true)")
+    if VAZIR.is_file():
+        loaded = page.evaluate(
+            """() => [...document.fonts].some((f) => f.family.replace(/"/g, "") === "Vazirmatn" && f.status === "loaded")"""
+        )
+        if not loaded:
+            raise SystemExit("Vazirmatn did not load. Refusing to continue with a fallback font.")
     page.wait_for_timeout(300)
 
 
@@ -578,6 +611,7 @@ def main() -> None:
                 check_flag_font(browser, panel, failures)
             else:
                 print("Screenshots:")
+                ensure_vazirmatn()
                 take_screenshots(browser, panel)
             browser.close()
     finally:
