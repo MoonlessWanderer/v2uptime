@@ -167,12 +167,10 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .page-top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .page-top .fine { margin: 4px 0 0; }
 .sort-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
-.banner { margin: 0; padding: 12px 16px; border-radius: 12px; font-weight: 700; }
-.banner-ok { background: var(--ok-soft); border: 1px solid var(--ok); }
-.banner-warn { background: var(--warn-soft); border: 1px solid var(--warn); }
-.banner-bad { background: var(--bad-soft); border: 1px solid var(--bad); }
-.banner-wait { background: var(--surface); border: 1px solid var(--border); }
-.check-line { margin: 8px 0 16px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+.check-line { margin: 14px 0 0; text-align: center; }
 .theme-toggle .ic-moon { display: none; }
 :root[data-theme="dark"] .theme-toggle .ic-sun { display: none; }
 :root[data-theme="dark"] .theme-toggle .ic-moon { display: block; }
@@ -206,53 +204,76 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .stat-offline .ic { color: var(--bad); background: var(--bad-soft); }
 .stat-uptime .ic { color: var(--accent); background: var(--accent-soft); }
 .stat-value { display: block; font-size: 1.35rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
-time, .num, .row-ping, .row-up { font-variant-numeric: tabular-nums; }
+time, .num, .card-ping, .card-stats dd { font-variant-numeric: tabular-nums; }
 .stat-label { display: block; color: var(--muted); font-size: 12.5px; }
 @media (min-width: 700px) { .summary { grid-template-columns: repeat(4, 1fr); } }
 .updated { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 12px 2px 14px; }
 .updated .sep { opacity: .6; }
 
-.list-head, .row-main {
-  display: grid; grid-template-columns: minmax(0, 1fr) 7.5rem 5.25rem 6.25rem; gap: 8px; align-items: center;
+/* Server cards. Closed: name and ping, the 24h bar, status and uptime. The bar sits outside the
+   button (it has its own pointer handling), positioned over the gap the button leaves for it. */
+.cards { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.card {
+  --pad: 11px; --top: 26px; --bar-h: 16px; --bar-gap: 8px;
+  position: relative; min-width: 0; padding: var(--pad) 14px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; cursor: pointer;
 }
-/* Fixed widths so every row lines up; sized for "Degraded" (with its dot), "9999 ms" and "99.99%". */
-@media (max-width: 699px) {
-  .row-main { grid-template-columns: minmax(0, 1fr) 5.75em 4.1em 3.75em; gap: 6px; }
+.card:hover { border-color: color-mix(in srgb, var(--border) 55%, var(--text-2)); }
+.card:has(.card-main:focus-visible) { box-shadow: var(--focus); }
+.card-main {
+  display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: start; cursor: pointer;
 }
-.list-head { padding: 8px 13px 4px; } /* 12px row padding + the list's 1px border */
-.list-head span:nth-child(n+3), .row-ping, .row-up { text-align: end; }
-.server-list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-.server-list > li + li { border-top: 1px solid var(--border); }
-.row-main {
-  width: 100%; min-height: 44px; padding: 8px 12px; border: 0; background: transparent; color: inherit;
-  cursor: pointer; text-align: start;
+.card-main:focus-visible { box-shadow: none; }
+.card-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.card-top { height: var(--top); }
+.card-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 700; }
+.card-ping { flex: none; font-size: 18px; font-weight: 800; }
+.card-ping.is-empty { color: var(--muted); font-weight: 600; }
+.card-gap { display: block; height: calc(var(--bar-h) + 2 * var(--bar-gap)); }
+.card-sub { height: 22px; font-size: 14px; color: var(--text-2); }
+.card-state { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-state strong { color: var(--text); font-weight: 700; }
+.card-range { flex: none; display: inline-flex; align-items: center; gap: 2px; }
+.card-range .ic { width: 16px; height: 16px; vertical-align: 0; transition: transform .2s; }
+.card.is-open .card-range .ic { transform: rotate(180deg); }
+.card-bars {
+  position: absolute; top: calc(var(--pad) + var(--top) + var(--bar-gap)); inset-inline: 14px; height: var(--bar-h);
+  cursor: default; touch-action: pan-y;
 }
-.row-main:hover { background: var(--surface-2); }
-.row-server { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.row-status, .row-ping, .row-up { white-space: nowrap; }
-.row-status.is-new { color: #4b5563; }
-:root[data-theme="dark"] .row-status.is-new { color: #c5ced9; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .row-status.is-new { color: #c5ced9; }
-}
-.view-fastest .row-ping, .view-stable .row-up { font-weight: 800; }
-.row-detail { padding: 4px 12px 12px; }
-.row-detail > p { margin: 8px 0; }
-.chart-range { margin: 8px 0; }
+.card.is-open .card-bars, .card.is-open .card-gap { display: none; }
+.card-sub { margin-top: 0; }
+.card.is-open .card-sub { margin-top: 6px; }
+.view-fastest .card-ping:not(.is-empty) { color: var(--accent); }
+.view-stable .card-up { color: var(--text); font-weight: 800; }
+
+/* Open card: one range control for the numbers, the bar and the ping chart (one time axis). */
+.card-detail { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); cursor: default; }
+.range-seg { margin-bottom: 12px; }
+.card-stats { display: flex; flex-wrap: wrap; gap: 6px 28px; margin: 0 0 12px; }
+.card-stats dt { font-size: 12.5px; color: var(--text-2); }
+.card-stats dd { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.3; }
+.timeline { position: relative; touch-action: pan-y; }
+.range-bars { height: var(--bar-h, 16px); margin-bottom: 6px; }
+.timeline .chart { height: 134px; } /* 116px plot + 18px time labels */
+.timeline.is-loading .range-bars, .timeline.is-loading .chart { background: var(--surface-2); border-radius: 6px; }
+.timeline.is-loading canvas { visibility: hidden; }
+.cursor { position: absolute; top: 0; bottom: 18px; width: 1px; margin-left: -0.5px; background: var(--text-2); pointer-events: none; }
+.card-incident { margin: 8px 0 0; }
 .chip {
   font-size: 12px; padding: 1px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2);
   direction: ltr; font-weight: 600;
 }
-.bars { display: flex; gap: 2px; height: 28px; direction: ltr; align-items: stretch; }
+/* Each cell takes exactly 1/n of the width (so it lines up with the chart's time axis); the colour is inset 1px. */
+.bars { display: flex; height: 16px; direction: ltr; align-items: stretch; }
 .b {
-  flex: 1 1 0; min-width: 2px; border-radius: 2px; background: var(--lv-none); transition: transform .1s, filter .1s;
+  flex: 1 1 0; min-width: 0; padding: 0 1px; border-radius: 3px; background: var(--lv-none); background-clip: content-box;
+  transition: filter .1s;
 }
-.b:hover, .b.is-hover { transform: scaleY(1.12); filter: brightness(1.1); }
-.lv-up { background: var(--lv-up); }
-.lv-minor { background: var(--lv-minor); }
-.lv-major { background: var(--lv-major); }
-.lv-down { background: var(--lv-down); }
-.bars-axis { display: flex; justify-content: space-between; direction: ltr; margin-top: 4px; }
+.b.is-hover { filter: brightness(1.25); }
+.lv-up { background-color: var(--lv-up); }
+.lv-minor { background-color: var(--lv-minor); }
+.lv-major { background-color: var(--lv-major); }
+.lv-down { background-color: var(--lv-down); }
 .empty {
   text-align: center; color: var(--muted); padding: 48px 16px; background: var(--surface);
   border: 1px dashed var(--border); border-radius: var(--radius);
@@ -263,14 +284,12 @@ time, .num, .row-ping, .row-up { font-variant-numeric: tabular-nums; }
 
 /* ------------------------------------------------------------------ tooltip */
 .tooltip {
-  position: fixed; z-index: 60; pointer-events: none; max-width: 260px;
+  position: fixed; z-index: 60; pointer-events: none; max-width: calc(100vw - 16px); white-space: nowrap;
   background: var(--text); color: var(--bg); border-radius: 8px; padding: 8px 12px; font-size: 13px;
 }
 .chart { position: relative; height: 160px; direction: ltr; }
 .chart canvas { width: 100%; height: 100%; display: block; }
 .chart.is-loading { background: var(--surface-2); border-radius: 8px; }
-.list-head { display: none; }
-@media (min-width: 700px) { .list-head { display: grid; } }
 
 /* ================================================================== admin */
 .admin { background: var(--bg); }

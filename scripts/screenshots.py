@@ -1,7 +1,7 @@
 """Rebuild the README screenshots (docs/screenshots/*.jpg) from sample data.
 
     python scripts/screenshots.py            # write the four images
-    python scripts/screenshots.py --check    # layout and flag-font checks only, nothing is written
+    python scripts/screenshots.py --check    # layout, card, touch, refresh and flag-font checks (about 2 minutes)
 
 A temporary database gets sample servers and 24 hours of checks. The panel
 runs on 127.0.0.1 with tests/fake_xray.py standing in for Xray; the checker
@@ -113,12 +113,54 @@ def seed(now: int) -> dict[str, int]:
         Incident.create(server=ids["🇫🇮 Helsinki gRPC"], started_at=closed[0], ended_at=closed[1],
                         duration_seconds=closed[1] - closed[0], error_type="timeout")
         Incident.create(server=ids["🇺🇸 New York"], started_at=down_since, error_type="timeout")
+    seed_history(now, ids, rng)
     from app.security import hash_password
 
     password = secrets.token_urlsafe(18)
     Admin.create(username="admin", password_hash=hash_password(password))
     ids["__password__"] = password  # type: ignore[assignment]
     return ids
+
+
+PAST_OUTAGES = {  # name: [(hours ago, minutes)] before the last 24 hours, so 7d and 30d differ from 24h
+    "Amsterdam WS 🇳🇱": [(5 * 24 + 7, 9), (19 * 24 + 2, 21)],
+    "🇫🇮 Helsinki gRPC": [(3 * 24 + 15, 35), (12 * 24 + 4, 12), (26 * 24 + 20, 48)],
+    "🇮🇷➡️🇩🇪 Tunnel": [(9 * 24 + 1, 17)],
+}
+
+
+def seed_history(now: int, ids: dict[str, int], rng: random.Random) -> None:
+    """Hourly rows for days 2–30, as the aggregator would have written them, plus their incidents."""
+    from app.db import db
+    from app.models import HourlyStat, Incident
+    from app.services.aggregator import percentile
+    from app.services.settings import settings
+    from app.timeutil import hour_floor
+
+    end = hour_floor(now - 24 * 3600)  # the raw checks cover the last 24 hours
+    rows = []
+    for name, _link, ping, _connect in SERVERS:
+        if name == "🇬🇧 London":
+            continue
+        outages = [(now - h * 3600, now - h * 3600 + m * 60) for h, m in PAST_OUTAGES.get(name, [])]
+        for hour in range(hour_floor(now - 30 * 86400), end, 3600):
+            fail = sum(max(0, min(hour + 3600, e) - max(hour, s)) // 60 for s, e in outages)
+            slow = 1.4 if rng.random() < 0.025 else 1.0  # an occasional slow hour
+            lat = [max(20, int(slow * ping * (1 + 0.12 * math.sin((hour + k * 60) / 5400)) + rng.gauss(0, ping * 0.07)))
+                   for k in range(60 - fail)]
+            rows.append({
+                "server": ids[name], "hour": hour, "total": 60, "success": len(lat), "fail": fail, "unknown": 0,
+                "latency_count": len(lat), "latency_sum": float(sum(lat)), "latency_sq_sum": float(sum(x * x for x in lat)),
+                "avg_latency": sum(lat) / len(lat) if lat else None, "min_latency": min(lat) if lat else None,
+                "max_latency": max(lat) if lat else None, "p95_latency": percentile(lat, 95),
+            })
+        for start, stop in outages:
+            Incident.create(server=ids[name], started_at=start, ended_at=stop, duration_seconds=stop - start,
+                            error_type="timeout")
+    with db.atomic():
+        for start in range(0, len(rows), 500):
+            HourlyStat.insert_many(rows[start:start + 500]).execute()
+    settings.set("agg_until", end, validated=True)
 
 
 # ------------------------------------------------------------------ server
@@ -193,18 +235,19 @@ def take_screenshots(browser, panel: Panel) -> None:
     settle(page)
     save_jpeg(page, OUT_DIR / "status-page.jpg", full_page=True)
 
-    row = page.locator(f'#servers > li[data-id="{panel.ids["🇫🇮 Helsinki gRPC"]}"]')
-    with page.expect_response(lambda r: "/history" in r.url):
-        row.locator(".row-main").click()
-    settle(page)
-    worst = row.evaluate("""li => {
-        const bars = [...li.querySelectorAll('.b')].filter(b => b.dataset.u !== '');
-        bars.sort((a, b) => parseFloat(a.dataset.u) - parseFloat(b.dataset.u));
-        return bars.length ? [...li.querySelectorAll('.b')].indexOf(bars[0]) : -1;
+    # A full-page capture resizes the viewport, and a resize hides the tooltip: use a tall viewport instead.
+    page.set_viewport_size({"width": 1280, "height": 1260})
+    card = open_card(page, panel.ids["🇫🇮 Helsinki gRPC"])
+    worst = card.evaluate("""li => {
+        const bars = li.querySelector('.timeline')._data.bars;
+        let pick = 0;
+        bars.forEach((b, i) => { if (b.uptime !== null && b.uptime < (bars[pick].uptime ?? 101)) pick = i; });
+        return [pick, bars.length];
     }""")
-    if worst >= 0:
-        row.locator(".b").nth(worst).hover()
-    save_jpeg(page, OUT_DIR / "server-detail.jpg", full_page=True)
+    box = card.locator(".timeline").bounding_box()
+    page.mouse.move(box["x"] + (worst[0] + 0.5) / worst[1] * box["width"], box["y"] + 70)  # cursor line + tooltip
+    page.wait_for_timeout(200)
+    save_jpeg(page, OUT_DIR / "server-detail.jpg")
     desktop.close()
 
     mobile = browser.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, is_mobile=True,
@@ -232,39 +275,47 @@ def take_screenshots(browser, panel: Panel) -> None:
 
 # ------------------------------------------------------------------ checks
 
-MEASURE = """() => {
+def open_card(page, server_id: int):
+    """Open a card by clicking its status line (line 3) and wait for its history."""
+    card = page.locator(f'#servers > li[data-id="{server_id}"]')
+    with page.expect_response(lambda r: "/history" in r.url):
+        card.locator(".card-sub").click()
+    settle(page)
+    return card
+
+
+CARDS = """() => {
     const box = (el) => el.getBoundingClientRect();
     const text = (el) => { const r = document.createRange(); r.selectNodeContents(el); return r.getBoundingClientRect(); };
-    const rows = [...document.querySelectorAll('#servers > li .row-main')];
-    const head = document.querySelector('.list-head');
-    const spans = head && getComputedStyle(head).display !== 'none' ? head.querySelectorAll('span') : null;
+    const cards = [...document.querySelectorAll('#servers > li')];
     return {
         scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth,
-        head: spans ? {status: box(spans[1]).left, ping: box(spans[2]).right, up: box(spans[3]).right} : null,
-        rows: rows.map((row) => {
-            const [name, status, ping, up] = ['.row-server', '.row-status', '.row-ping', '.row-up']
-                .map((s) => row.querySelector(s));
-            return {
-                nameWidth: box(name).width,
-                status: box(status).left, statusText: text(status).left,
-                statusFits: text(status).right <= box(status).right + 0.5,
-                ping: box(ping).right, pingText: text(ping).right, pingFits: text(ping).left >= box(ping).left - 0.5,
-                up: box(up).right, upText: text(up).right, upFits: text(up).left >= box(up).left - 0.5,
-            };
-        }),
+        cards: cards.map((li) => ({
+            top: box(li).top, bottom: box(li).bottom, height: box(li).height,
+            ping: text(li.querySelector('.card-ping')).right,
+            nameFits: box(li.querySelector('.card-name')).right <= box(li.querySelector('.card-ping')).left + 0.5,
+        })),
     };
 }"""
 
-LONGEST = """() => {
-    const rows = [...document.querySelectorAll('#servers > li .row-main')];
-    const set = (row, status, ping, up) => {
-        row.querySelector('.row-status').innerHTML = '<span class="status-dot degraded"></span>' + status;
-        row.querySelector('.row-ping').textContent = ping;
-        row.querySelector('.row-up').textContent = up;
+LONG_NAME = """() => {
+    document.querySelector('#servers > li .card-name bdi').textContent =
+        '🇩🇪 A very long server name that has to be cut short on a phone | Reality';
+}"""
+
+OPEN_STATE = """(li) => {
+    const box = (el) => el.getBoundingClientRect();
+    const bars = li.querySelector('.range-bars'), canvas = li.querySelector('.timeline canvas');
+    return {
+        open: li.classList.contains('is-open'),
+        closedBarHidden: getComputedStyle(li.querySelector('.card-bars')).display === 'none',
+        range: li.querySelector('.range-seg [aria-pressed="true"]').dataset.range,
+        cells: bars.children.length,
+        stats: [...li.querySelectorAll('[data-stat]')].map((d) => d.textContent).join(' | '),
+        chart: canvas.toDataURL().length + ':' + canvas.toDataURL().slice(-64),
+        edges: [box(bars).left - box(canvas).left, box(bars).right - box(canvas).right],
+        label: canvas.getAttribute('aria-label'),
     };
-    set(rows[0], 'Degraded', '9999 ms', '99.99%');
-    set(rows[1], 'Unknown', '—', '100%');
-    rows[2].querySelector('.row-server bdi').textContent = '🇩🇪 A very long server name that must be cut short | Reality';
 }"""
 
 
@@ -275,47 +326,116 @@ def check_layout(browser, panel: Panel, failures: list[str]) -> None:
         page = context.new_page()
         page.goto(panel.url + "/")
         settle(page)
-        page.evaluate(LONGEST)
-        data = page.evaluate(MEASURE)
-        rows = data["rows"]
-        label = f"{width}px"
-        if data["scrollWidth"] > data["innerWidth"]:
-            failures.append(f"{label}: horizontal scroll ({data['scrollWidth']} > {data['innerWidth']})")
-        for key in ("status", "statusText", "ping", "pingText", "up", "upText"):
-            values = [r[key] for r in rows]
-            if max(values) - min(values) > 0.5:
-                failures.append(f"{label}: {key} edges differ: {sorted(set(round(v, 1) for v in values))}")
-        for key in ("statusFits", "pingFits", "upFits"):
-            if not all(r[key] for r in rows):
-                failures.append(f"{label}: text overflows its column ({key})")
-        if data["head"]:
-            first = rows[0]
-            for head_key, row_key in (("status", "status"), ("ping", "ping"), ("up", "up")):
-                if abs(data["head"][head_key] - first[row_key]) > 0.5:
-                    failures.append(f"{label}: list header {head_key} edge {data['head'][head_key]:.1f} "
-                                    f"!= row {first[row_key]:.1f}")
-        print(f"  {label}: {len(rows)} rows, status left {rows[0]['status']:.1f}, ping right {rows[0]['ping']:.1f}, "
-              f"uptime right {rows[0]['up']:.1f}, name column {min(r['nameWidth'] for r in rows):.0f}px"
-              + (", header aligned" if data["head"] else ""))
+        page.evaluate(LONG_NAME)
+        data = page.evaluate(CARDS)
+        cards, label = data["cards"], f"{width}px"
+        # A phone widens its layout viewport to fit wide content, so compare with the requested width too.
+        if data["scrollWidth"] > width or data["innerWidth"] != width:
+            failures.append(f"{label}: horizontal scroll (page {data['scrollWidth']}px, viewport {data['innerWidth']}px)")
+        gaps = [b["top"] - a["bottom"] for a, b in zip(cards, cards[1:])]
+        if min(gaps) < 8:
+            failures.append(f"{label}: cards closer than 8px ({min(gaps):.1f})")
+        if max(c["height"] for c in cards) >= 115:
+            failures.append(f"{label}: a closed card is {max(c['height'] for c in cards):.0f}px tall")
+        pings = [c["ping"] for c in cards]
+        if max(pings) - min(pings) > 0.5:
+            failures.append(f"{label}: ping right edges differ: {sorted(set(round(p, 1) for p in pings))}")
+        if not all(c["nameFits"] for c in cards):
+            failures.append(f"{label}: a name runs into the ping")
+        print(f"  {label}: {len(cards)} cards, height {min(c['height'] for c in cards):.0f}-"
+              f"{max(c['height'] for c in cards):.0f}px, gap {min(gaps):.0f}px, ping right {pings[0]:.1f}")
         context.close()
 
 
-REFRESH = """async () => {
-    // Hide and show the page: public.js refreshes the live parts when it becomes visible again.
-    const done = new Promise((resolve) => {
-        const original = window.fetch;
-        window.fetch = (...args) => original(...args).then((r) => { setTimeout(resolve, 300); return r; });
-    });
-    for (const hidden of [true, false]) {
-        Object.defineProperty(document, 'hidden', {value: hidden, configurable: true});
-        document.dispatchEvent(new Event('visibilitychange'));
-    }
-    await done;
-}"""
+def check_open_card(browser, panel: Panel, failures: list[str]) -> None:
+    context = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark")
+    page = context.new_page()
+    page.goto(panel.url + "/")
+    settle(page)
+    card = open_card(page, panel.ids["Amsterdam WS 🇳🇱"])
+    day = card.evaluate(OPEN_STATE)
+    if not (day["open"] and day["closedBarHidden"] and day["range"] == "24h" and day["cells"] == 48):
+        failures.append(f"open card (24h): {day}")
+    if max(abs(e) for e in day["edges"]) > 1:
+        failures.append(f"bar and chart edges differ by {day['edges']}")
+    if not day["label"].startswith("Ping over the last 24 hours, average "):
+        failures.append(f"chart label: {day['label']!r}")
+    print(f"  opened by its status line; 24h: {day['cells']} cells, {day['stats']}, "
+          f"bar/chart edge offset {day['edges'][0]:.2f}/{day['edges'][1]:.2f}px")
+    seen = {day["stats"]: "24h"}
+    for range_key, cells in (("7d", 42), ("30d", 30)):
+        with page.expect_response(lambda r, k=range_key: f"range={k}" in r.url):
+            card.locator(f'.range-seg [data-range="{range_key}"]').click()
+        settle(page)
+        state = card.evaluate(OPEN_STATE)
+        if state["range"] != range_key or state["cells"] != cells:
+            failures.append(f"{range_key}: {state}")
+        if state["stats"] in seen or state["chart"] == day["chart"]:
+            failures.append(f"{range_key}: numbers or chart did not change ({state['stats']})")
+        if max(abs(e) for e in state["edges"]) > 1:
+            failures.append(f"{range_key}: bar and chart edges differ by {state['edges']}")
+        seen[state["stats"]] = range_key
+        print(f"  {range_key}: {state['cells']} cells, {state['stats']}")
+    requests = []
+    page.on("request", lambda r: requests.append(r.url) if "/history" in r.url else None)
+    card.locator('.range-seg [data-range="24h"]').click()
+    page.wait_for_timeout(300)
+    if requests:
+        failures.append(f"switching back to a cached range sent {requests}")
+    context.close()
+
+
+def touch(cdp, kind: str, x: float = 0, y: float = 0) -> None:
+    points = [] if kind == "touchEnd" else [{"x": x, "y": y}]
+    cdp.send("Input.dispatchTouchEvent", {"type": kind, "touchPoints": points})
+
+
+def check_touch(browser, panel: Panel, failures: list[str]) -> None:
+    context = browser.new_context(viewport={"width": 390, "height": 844}, color_scheme="dark", is_mobile=True,
+                                  has_touch=True)
+    page = context.new_page()
+    page.goto(panel.url + "/")
+    settle(page)
+    cdp = context.new_cdp_session(page)
+    card = page.locator(f'#servers > li[data-id="{panel.ids["🇫🇮 Helsinki gRPC"]}"]')
+    with page.expect_response(lambda r: "/history" in r.url):
+        box = card.locator(".card-sub").bounding_box()
+        page.touchscreen.tap(box["x"] + 40, box["y"] + box["height"] / 2)
+    settle(page)
+    chart = card.locator(".timeline .chart").bounding_box()
+    y = chart["y"] + chart["height"] / 2
+    positions = []
+    touch(cdp, "touchStart", chart["x"] + chart["width"] * 0.2, y)
+    for share in (0.3, 0.5, 0.7):
+        touch(cdp, "touchMove", chart["x"] + chart["width"] * share, y)
+        page.wait_for_timeout(80)
+        positions.append(page.evaluate(f"""() => {{
+            const c = document.querySelector('#servers > li[data-id="{panel.ids["🇫🇮 Helsinki gRPC"]}"] .cursor');
+            return c.hidden ? null : c.style.left;
+        }}"""))
+    tip = page.evaluate("document.getElementById('tooltip').hidden ? '' : document.getElementById('tooltip').textContent")
+    touch(cdp, "touchEnd")
+    page.wait_for_timeout(150)
+    still_open = card.evaluate("li => li.classList.contains('is-open')")
+    if None in positions or len(set(positions)) != 3 or not tip or not still_open:
+        failures.append(f"touch drag on the chart: cursor {positions}, tooltip {tip!r}, open {still_open}")
+    print(f"  drag on chart: cursor at {positions}, tooltip {tip!r}, card still open: {still_open}")
+
+    other = page.locator(f'#servers > li[data-id="{panel.ids["🇩🇪 Germany | Reality"]}"]')
+    bar = other.locator(".card-bars").bounding_box()
+    page.touchscreen.tap(bar["x"] + bar["width"] * 0.8, bar["y"] + bar["height"] / 2)
+    page.wait_for_timeout(150)
+    tip = page.evaluate("document.getElementById('tooltip').hidden ? '' : document.getElementById('tooltip').textContent")
+    opened = other.evaluate("li => li.classList.contains('is-open')")
+    if not tip or opened:
+        failures.append(f"tap on a closed bar: tooltip {tip!r}, card opened {opened}")
+    print(f"  tap on closed bar: tooltip {tip!r}, card opened: {opened}")
+    context.close()
 
 
 def check_refresh(browser, panel: Panel, failures: list[str]) -> None:
-    context = browser.new_context(viewport={"width": 1280, "height": 500}, color_scheme="dark")
+    """Waits for a real refresh (60s timer) with a card open on 7d."""
+    context = browser.new_context(viewport={"width": 1280, "height": 600}, color_scheme="dark")
     page = context.new_page()
     page.goto(panel.url + "/")
     settle(page)
@@ -325,48 +445,46 @@ def check_refresh(browser, panel: Panel, failures: list[str]) -> None:
         failures.append(f"page order is {order}")
     live = page.evaluate("""() => ({
         container: document.getElementById('live-summary').getAttribute('aria-live'),
-        inner: document.querySelectorAll('#live-summary [aria-live]').length})""")
-    if live != {"container": "polite", "inner": 0}:
-        failures.append(f"aria-live should be only on #live-summary: {live}")
+        inner: document.querySelectorAll('#live-summary [aria-live]').length,
+        banner: document.querySelectorAll('.banner').length,
+        text: document.querySelector('#live-summary .sr-only').textContent})""")
+    if (live["container"], live["inner"], live["banner"]) != ("polite", 0, 0):
+        failures.append(f"live summary: {live}")
+    print(f"  screen-reader summary: {live['text']!r}")
 
-    sid = panel.ids["🇫🇮 Helsinki gRPC"]
+    sid = panel.ids["Amsterdam WS 🇳🇱"]
     page.click('[data-tab="fastest"]')
-    row = f'#servers > li[data-id="{sid}"]'
-    page.click(f"{row} .row-main")
+    card = open_card(page, sid)
     with page.expect_response(lambda r: "range=7d" in r.url):
-        page.click(f'{row} .chart-range [data-range="7d"]')
+        card.locator('.range-seg [data-range="7d"]').click()
+    settle(page)
     page.evaluate(f"""() => {{
-        document.querySelector('{row} .row-main').focus();
-        window.scrollTo(0, 260);
+        document.querySelector('#servers > li[data-id="{sid}"] .range-seg [data-range="7d"]').focus();
+        window.scrollTo(0, 200);
         window.__summary = [...document.getElementById('live-summary').children];
-        window.__list = document.querySelector('#servers');
+        window.__list = document.getElementById('servers');
     }}""")
     before = page.evaluate("window.scrollY")
-    page.evaluate(REFRESH)
-    state = page.evaluate(f"""() => ({{
-        listReplaced: document.querySelector('#servers') !== window.__list,
-        summaryKept: [...document.getElementById('live-summary').children].every((el, i) => el === window.__summary[i]),
-        open: document.querySelector('{row} .row-main').getAttribute('aria-expanded') === 'true'
-              && !document.getElementById('detail-{sid}').hidden,
-        tab: document.querySelector('[data-tab].is-active').dataset.tab,
-        range: document.querySelector('{row} .chart-range .is-active').dataset.range,
-        chartDrawn: document.querySelector('{row} canvas').width > 0,
-        focus: document.activeElement === document.querySelector('{row} .row-main'),
-        scrollY: window.scrollY,
-    }})""")
-    expected = {"listReplaced": True, "summaryKept": True, "open": True, "tab": "fastest", "range": "7d",
-                "chartDrawn": True, "focus": True, "scrollY": before}
+    page.wait_for_timeout(66_000)
+    settle(page)
+    state = page.evaluate(f"""() => {{
+        const li = document.querySelector('#servers > li[data-id="{sid}"]');
+        return {{
+            listReplaced: document.getElementById('servers') !== window.__list,
+            summaryKept: [...document.getElementById('live-summary').children].every((el, i) => el === window.__summary[i]),
+            open: li.classList.contains('is-open') && !li.querySelector('.card-detail').hidden,
+            range: li.querySelector('.range-seg [aria-pressed="true"]').dataset.range,
+            cells: li.querySelectorAll('.range-bars .b').length,
+            tab: document.querySelector('[data-tab].is-active').dataset.tab,
+            focus: document.activeElement === li.querySelector('.range-seg [data-range="7d"]'),
+            scrollY: window.scrollY,
+        }};
+    }}""")
+    expected = {"listReplaced": True, "summaryKept": True, "open": True, "range": "7d", "cells": 42,
+                "tab": "fastest", "focus": True, "scrollY": before}
     if state != expected:
-        failures.append(f"refresh did not keep the view: {state} (expected {expected})")
-    print(f"  refresh keeps open row, tab, chart range, scroll and focus: {state == expected}; "
-          f"unchanged summary left in place: {state['summaryKept']}")
-
-    page.evaluate("document.querySelector('#live-summary .banner').textContent = 'stale text'")
-    page.evaluate(REFRESH)
-    banner = page.evaluate("document.querySelector('#live-summary .banner').textContent")
-    if banner == "stale text":
-        failures.append("summary text changed on the server but was not replaced")
-    print(f"  changed summary replaced: {banner != 'stale text'} ({banner!r})")
+        failures.append(f"after the 60s refresh: {state} (expected {expected})")
+    print(f"  after a real refresh (66s): {state}")
     context.close()
 
 
@@ -440,8 +558,12 @@ def main() -> None:
         with Panel(tmp) as panel, sync_playwright() as pw:
             browser = pw.chromium.launch()
             if args.check:
-                print("Layout (longest values injected):")
+                print("Closed cards (a long name injected):")
                 check_layout(browser, panel, failures)
+                print("Open card:")
+                check_open_card(browser, panel, failures)
+                print("Touch:")
+                check_touch(browser, panel, failures)
                 print("Refresh:")
                 check_refresh(browser, panel, failures)
                 print("Flag font:")

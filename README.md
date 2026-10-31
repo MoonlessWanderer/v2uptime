@@ -15,7 +15,7 @@ The public page lists each server’s status, ping, and uptime. The admin panel 
 - Add, edit, and remove servers through the Xray API while the process stays up. If a hot reload fails, Xray restarts once and the check cycle that overlapped the restart is discarded.
 - Detects when the monitor’s own internet is down (a direct reference request) and keeps those results out of uptime.
 - Incidents use an N/M rule. Flapping is detected. Incident stats include count, downtime, mean time to recover, and longest outage.
-- Public page: one status banner, a server list (name, status, ping, 24h uptime), Fastest and Most stable sorting, and a row that opens 24h/7d/30d uptime, a 24h status bar, the last incident, and a ping chart. Light and dark theme. Refreshes every 60 seconds.
+- Public page: one card per server with its name and ping, a 24h status bar, and its status and 24h uptime. Fastest and Most stable sorting. An open card has one 24h/7d/30d control for its uptime, average ping, incident count, status bar, and ping chart; the bar and the chart share one time axis, and a pointer or finger on either shows a cursor line and the values for that slot. Light and dark theme. Refreshes every 60 seconds.
 - Telegram bot with a durable queue. Messages go out directly, or through an online server when `api.telegram.org` is not reachable from the monitor.
 - Server names are shown exactly as written in the config, everywhere (public page, admin, Telegram, API). A flag is shown only when it is part of the name; none is added.
 - Fonts, icons, and charts are served by the app. No third-party CDN.
@@ -206,7 +206,7 @@ The app listens on `127.0.0.1` only (nginx in front). It runs as one worker beca
 Read-only. Responses do not include share links, addresses, or ports. Hidden and inactive servers are omitted; asking for one by id returns 404.
 
 - `GET /api/status?range=24h|7d|30d` — summary, status, and metrics for every public server, status bars for the range, and the Fastest and Most stable order. Each server has `latency_ms` (last check) and `ping_ms` (the 10-minute median shown on the page).
-- `GET /api/servers/{id}/history?range=24h|7d|30d` — ping and uptime series, a range summary, and incidents.
+- `GET /api/servers/{id}/history?range=24h|7d|30d` — ping and uptime series, a range summary, incidents, and `bars`: the status bar for the range, built the same way as on the status page (24h: 48 half-hour cells, 7d: 42 four-hour cells, 30d: 30 days). Each cell is `{"start", "end", "level": "up|minor|major|down|none", "uptime", "checks", "incidents"}`; the 24h cells match the server's `bars` in `/api/status`.
 - `GET /healthz` — process health.
 
 Responses are cached for at most 60 seconds and are invalidated after each check cycle.

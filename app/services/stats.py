@@ -316,6 +316,14 @@ def bar_counts(range_key: str, buckets: list[Bucket], server_id: int | None = No
     return bucketize(buckets, rows)
 
 
+def bar_items(buckets: list[Bucket], counts: list[Counts], incident_starts: list[int]) -> list[dict[str, Any]]:
+    """Status bar cells; the public list and the history API use this same function."""
+    return [{
+        "level": bar_level(c.uptime), "uptime": _round(c.uptime, 2), "checks": c.valid,
+        "incidents": sum(bucket.start <= s < bucket.end for s in incident_starts),
+    } for bucket, c in zip(buckets, counts)]
+
+
 def incidents_overlapping(since: int, now: int, server_id: int | None = None) -> list[Incident]:
     query = Incident.select().where(Incident.started_at < now,
                                     Incident.ended_at.is_null() | (Incident.ended_at >= since))
@@ -445,13 +453,7 @@ class StatsService:
         for server in servers:
             m = metrics.get(server.id) or self.live_metrics(server.id, now)
             counts = bars.get(server.id) or [Counts() for _ in buckets]
-            starts = incident_starts.get(server.id, [])
-            bucket_items = []
-            for bucket, c in zip(buckets, counts):
-                bucket_items.append({
-                    "level": bar_level(c.uptime), "uptime": _round(c.uptime, 2), "checks": c.valid,
-                    "incidents": sum(bucket.start <= s < bucket.end for s in starts),
-                })
+            bucket_items = bar_items(buckets, counts, incident_starts.get(server.id, []))
             cards.append({
                 "id": server.id, "name": server.name, "country": server.country,
                 "protocol": server.protocol, "transport": server.transport,
@@ -513,6 +515,11 @@ class StatsService:
         else:
             rows = series_rows(buckets[0].start, server_id)
         series = bucketize(buckets, rows).get(server_id) or [Counts() for _ in buckets]
+        bar_buckets = make_buckets(range_key, now, tz)
+        bar_counts_ = bar_counts(range_key, bar_buckets, server_id).get(server_id) or [Counts() for _ in bar_buckets]
+        bar_starts = [i.started_at for i in incidents_overlapping(bar_buckets[0].start, now, server_id)]
+        bars = [{"start": iso_utc(b.start), "end": iso_utc(b.end), **item}
+                for b, item in zip(bar_buckets, bar_items(bar_buckets, bar_counts_, bar_starts))]
         points = [{
             "t": iso_utc(b.start), "label": fmt_datetime(b.start, tz),
             "latency": _round(c.avg_latency, 0), "uptime": _round(c.uptime, 2), "checks": c.valid,
@@ -541,6 +548,7 @@ class StatsService:
             "range_label": range_key,
             "timezone": {"name": tz, "offset": tz_offset(tz, now)},
             "points": points,
+            "bars": bars,
             "summary": {
                 "uptime": _round(total.uptime, 2), "checks": total.valid, "failures": total.fail,
                 "avg_latency": _round(total.avg_latency, 0), "min_latency": total.lat_min,

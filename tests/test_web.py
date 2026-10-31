@@ -252,9 +252,15 @@ def test_persian_server_name_is_isolated(client):
 
 
 def _row(html, server_id):
-    match = re.search(rf'<li data-id="{server_id}".*?</li>', html, re.S)
-    assert match, f"row {server_id} not found"
+    match = re.search(rf'<li class="card" data-id="{server_id}".*?</li>', html, re.S)
+    assert match, f"card {server_id} not found"
     return match.group(0)
+
+
+def _card_state(card_html):
+    """Line 3 of a card: status and uptime, as plain text."""
+    inner = re.search(r'<span class="card-state">(.*?)</span>\s*<span class="card-range"', card_html, re.S).group(1)
+    return " ".join(re.sub(r"<[^>]+>", "", inner).split())
 
 
 def test_new_label_is_the_same_on_page_and_api(client):
@@ -271,9 +277,7 @@ def test_new_label_is_the_same_on_page_and_api(client):
     for server, label in ((fresh, "New"), (settled, "Unknown")):
         history = client.get(f"/api/servers/{server.id}/history").json()["server"]
         assert history["status"] == "unknown" and history["status_label"] == label
-        row_status = re.search(r'class="row-status[^"]*">(.*?)</span>\s*<span class="row-ping"',
-                               _row(client.get("/").text, server.id), re.S).group(1)
-        assert re.sub(r"<[^>]+>", "", row_status).strip() == label
+        assert _card_state(_row(client.get("/").text, server.id)).startswith(label)
 
 
 # Remark -> stored country. Names are shown exactly as written; no flag is ever added.
@@ -342,3 +346,84 @@ def test_names_are_shown_exactly_as_written(client):
                      messages.server_up(name, now_ts() - 60, now_ts(), 60)):
             assert f"{messages.FSI}{name}{messages.PDI}" in text
             assert not _flag_letters(text.replace(name, ""))
+
+
+# ------------------------------------------------------------ public cards
+
+def _four_states(client):
+    """Online, Degraded, Down (open incident) and New servers, loaded the way the app starts."""
+    from app.models import Incident
+    from app.services.status import seed_rows
+
+    now = now_ts()
+    online = make_server("🇩🇪 Germany | Reality", port=20021, sort_order=1)
+    add_checks(online, now - 1500, "o" * 25, latency=140)
+    degraded = make_server("Tunnel", port=20022, sort_order=2)
+    add_checks(degraded, now - 1500, "o" * 16 + "fooffoofoo", latency=95)  # 3 of the last 10 failed
+    down = make_server("New York", port=20023, sort_order=3)
+    add_checks(down, now - 3600, "o" * 13 + "f" * 47, latency=310)
+    Incident.create(server=down, started_at=now - 47 * 60, error_type="timeout")
+    new = make_server("London", port=20024, sort_order=4)
+    add_checks(new, now - 300, "ooo", latency=170)
+    services = client.app.state.services
+    services.incidents.restore()
+    services.live.seed(seed_rows(now - 3600))
+    services.stats.invalidate()
+    return {"online": online, "degraded": degraded, "down": down, "new": new}
+
+
+def test_public_page_has_no_banner_and_keeps_live_parts(client):
+    _four_states(client)
+    page = client.get("/").text
+    assert 'class="banner' not in page
+    summary = re.search(r'<div id="live-summary" aria-live="polite">(.*?)</div>', page, re.S).group(1)
+    assert '<p class="sr-only">1 of 4 servers is down, 1 degraded</p>' in summary
+    for html in (page, client.get("/partials/live").text):
+        live_list = html[html.index('id="live-list"'):]
+        assert 'id="bucket-meta"' in live_list
+        assert "Last check:" in live_list and "Last check:" not in html[:html.index('id="live-list"')]
+
+
+def test_closed_cards_show_name_ping_bar_and_status(client):
+    from app.timeutil import fmt_duration, fmt_percent
+
+    servers = _four_states(client)
+    page = client.get("/").text
+    cards = {s["id"]: s for s in client.get("/api/status").json()["servers"]}
+    for key, server in servers.items():
+        card = _row(page, server.id)
+        assert f'title="{server.name}"><bdi>{server.name}</bdi>' in card
+        assert len(re.findall(r'<i class="b lv-', card.split('class="card-detail"')[0])) == 48
+        ping = re.search(r'<span class="card-ping[^"]*">([^<]*)</span>', card).group(1)
+        assert ping == (f"{cards[server.id]['ping_ms']} ms" if cards[server.id]["ping_ms"] is not None else "—")
+    up = {key: fmt_percent(cards[s.id]["uptime_24h"]) for key, s in servers.items()}
+    down_for = fmt_duration(cards[servers["down"].id]["last_incident"]["duration_seconds"])
+    assert _card_state(_row(page, servers["online"].id)) == "Online · 100% uptime"
+    assert _card_state(_row(page, servers["degraded"].id)) == f"Degraded · {up['degraded']} uptime"
+    assert _card_state(_row(page, servers["down"].id)) == f"Down for {down_for} · {up['down']} uptime"
+    assert _card_state(_row(page, servers["new"].id)) == "New · Collecting data"
+    assert 'class="card-ping is-empty">—</span>' in _row(page, servers["down"].id)
+    assert "Down since" in _row(page, servers["down"].id)
+    for button in re.findall(r"<button\b.*?</button>", page, re.S):
+        assert 'class="bars' not in button and 'class="timeline' not in button
+
+
+def test_history_bars_match_the_status_page(client, seeded, monkeypatch):
+    from app.services import stats as stats_mod
+
+    visible, hidden, inactive = seeded
+    frozen = now_ts()
+    monkeypatch.setattr(stats_mod, "now_ts", lambda: frozen)
+    client.app.state.services.stats.invalidate()
+    status = client.get("/api/status?range=24h").json()
+    for range_key, count in (("24h", 48), ("7d", 42), ("30d", 30)):
+        bars = client.get(f"/api/servers/{visible.id}/history?range={range_key}").json()["bars"]
+        assert len(bars) == count
+        assert all(set(b) == {"start", "end", "level", "uptime", "checks", "incidents"} for b in bars)
+        assert all(a["end"] == b["start"] for a, b in zip(bars, bars[1:]))
+    day = client.get(f"/api/servers/{visible.id}/history?range=24h").json()["bars"]
+    assert [{k: v for k, v in b.items() if k not in ("start", "end")} for b in day] == status["servers"][0]["bars"]
+    assert [(b["start"], b["end"]) for b in day] == [(b["start"], b["end"]) for b in status["buckets"]]
+    assert sum(b["checks"] for b in day) == 20
+    for server in (hidden, inactive):
+        assert client.get(f"/api/servers/{server.id}/history?range=7d").status_code == 404

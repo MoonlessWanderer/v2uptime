@@ -184,10 +184,138 @@
     }
   };
 
+  /*
+   * Timeline: the public card's ping chart. x is time, from bars[0].start to the end of the last
+   * bar, with no horizontal padding, so it lines up with the status bar drawn above it (same
+   * width, same time window). y labels sit inside the plot; time labels go underneath.
+   * Pointer handling (cursor line, tooltip) is done by public.js for the bar and chart together.
+   */
+  var LABEL_H = 18;
+
+  function niceStep(max) {
+    var raw = max / 3, power = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / power;
+    return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * power;
+  }
+
+  function timeTicks(bars, range, start, end) {
+    var T = window.UptimeTime, ticks = [];
+    if (!T || !bars.length) return ticks;
+    if (range === "24h") {
+      ticks.push({ t: start, text: "24h ago", align: "left" });
+      bars.forEach(function (b) {
+        var hm = T.formatTime(b.start);
+        if (/^(00|06|12|18):00$/.test(hm)) ticks.push({ t: Date.parse(b.start), text: hm, align: "center" });
+      });
+      ticks.push({ t: end, text: "now", align: "right" });
+    } else if (range === "7d") {
+      var midnights = bars.filter(function (b) { return T.formatTime(b.start) === "00:00"; });
+      for (var k = midnights.length - 1; k >= 0; k -= 2) {
+        ticks.push({ t: Date.parse(midnights[k].start), text: T.formatMonthDay(midnights[k].start), align: "center" });
+      }
+    } else {
+      ticks.push({ t: end, text: "today", align: "right" });
+      for (var d = bars.length - 9; d >= 0; d -= 8) {
+        var mid = (Date.parse(bars[d].start) + Date.parse(bars[d].end)) / 2;
+        ticks.push({ t: mid, text: T.formatMonthDay(bars[d].start), align: "center" });
+      }
+    }
+    // edge labels ("24h ago", "now", "today") win over a middle label that would collide
+    return ticks.sort(function (a, b) { return (a.align === "center") - (b.align === "center"); });
+  }
+
+  function Timeline(canvas, cfg) {
+    this.canvas = canvas;
+    this.cfg = cfg;
+    var self = this;
+    this._redraw = function () { if (canvas.isConnected) self.draw(); else self.destroy(); };
+    window.addEventListener("resize", this._redraw);
+    document.addEventListener("themechange", this._redraw);
+    this.draw();
+  }
+
+  Timeline.prototype.destroy = function () {
+    window.removeEventListener("resize", this._redraw);
+    document.removeEventListener("themechange", this._redraw);
+  };
+
+  Timeline.prototype.draw = function () {
+    var cfg = this.cfg, canvas = this.canvas, bars = cfg.bars || [];
+    var rect = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    var w = rect.width, h = rect.height, plotH = Math.max(1, h - LABEL_H), top = 14;  // room for the top y label
+    ctx.clearRect(0, 0, w, h);
+    if (!bars.length) return;
+    var start = Date.parse(bars[0].start), end = Date.parse(bars[bars.length - 1].end), span = end - start;
+    var xAt = function (t) { return (t - start) / span * w; };
+
+    var pts = (cfg.points || []).map(function (p) { return { t: Date.parse(p.t), v: p.latency }; });
+    var half = pts.length > 1 ? (pts[1].t - pts[0].t) / 2 : 0;
+    pts = pts.map(function (p) { return { t: p.t + half, v: p.v }; })  // plot each bucket at its middle
+      .filter(function (p) { return p.t >= start && p.t <= end; });
+    var values = pts.filter(function (p) { return p.v !== null && p.v !== undefined; }).map(function (p) { return p.v; });
+    var max = values.length ? Math.max.apply(null, values) : 100;
+    var step = niceStep(max * 1.15 || 1), yMax = Math.ceil(max * 1.15 / step) * step || step;
+    var yAt = function (v) { return top + (plotH - top) * (1 - v / yMax); };
+
+    var muted = cssVar("--muted"), grid = cssVar("--border"), color = cfg.color || cssVar("--accent");
+    ctx.font = "10px system-ui, Segoe UI, sans-serif";
+    ctx.lineWidth = 1;
+    for (var g = step; g <= yMax + 0.001; g += step) {  // grid lines with their label inside, above the line
+      var gy = Math.round(yAt(g)) + 0.5;
+      ctx.strokeStyle = grid; ctx.globalAlpha = 0.7;
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      ctx.globalAlpha = 0.6; ctx.fillStyle = muted; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+      ctx.fillText(String(Math.round(g)), 2, gy - 2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = grid;
+    ctx.beginPath(); ctx.moveTo(0, plotH + 0.5); ctx.lineTo(w, plotH + 0.5); ctx.stroke();
+
+    // line and soft area, broken where there is no ping (outages)
+    var runs = [], run = [];
+    pts.forEach(function (p) {
+      if (p.v === null || p.v === undefined) { if (run.length) runs.push(run); run = []; }
+      else run.push({ x: xAt(p.t), y: yAt(p.v) });
+    });
+    if (run.length) runs.push(run);
+    runs.forEach(function (r) {
+      ctx.beginPath();
+      r.forEach(function (p, i) { if (i) ctx.lineTo(p.x, p.y); else ctx.moveTo(p.x, p.y); });
+      ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.lineJoin = "round"; ctx.stroke();
+      ctx.lineTo(r[r.length - 1].x, plotH); ctx.lineTo(r[0].x, plotH); ctx.closePath();
+      ctx.globalAlpha = 0.14; ctx.fillStyle = color; ctx.fill(); ctx.globalAlpha = 1;
+    });
+    if (!values.length) {
+      ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.font = "12px system-ui, sans-serif";
+      ctx.fillText("No ping data", w / 2, plotH / 2);
+    }
+
+    // time labels under the plot; drop the ones that would collide
+    ctx.font = "11px system-ui, Segoe UI, sans-serif"; ctx.fillStyle = muted; ctx.textBaseline = "top";
+    var placed = [];
+    timeTicks(bars, cfg.range, start, end).forEach(function (tick) {
+      var tw = ctx.measureText(tick.text).width, x = xAt(tick.t);
+      var left = tick.align === "left" ? x : tick.align === "right" ? x - tw : Math.min(Math.max(x - tw / 2, 0), w - tw);
+      var clash = placed.some(function (p) { return left < p.right + 24 && left + tw + 24 > p.left; });
+      if (clash) return;
+      placed.push({ left: left, right: left + tw });
+      ctx.textAlign = "left";
+      ctx.fillText(tick.text, left, plotH + 4);
+    });
+  };
+
   window.MiniChart = {
     render: function (canvas, cfg) {
       if (canvas._chart) canvas._chart.destroy();
       canvas._chart = new Chart(canvas, cfg);
+      return canvas._chart;
+    },
+    timeline: function (canvas, cfg) {
+      if (canvas._chart) canvas._chart.destroy();
+      canvas._chart = new Timeline(canvas, cfg);
       return canvas._chart;
     }
   };

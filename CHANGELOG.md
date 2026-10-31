@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.0
+
+### Public page: one card per server
+
+- The status banner is gone; its text stays for screen readers only (`#live-summary`, `aria-live`). "Last check" moved under the last card.
+- Each server is a card: name and ping, the 24h status bar, then status and 24h uptime (`Online · 100% uptime`, `Down for 1h · 96.73% uptime`, `New · Collecting data`). The whole card opens and closes; the bar does not.
+- An open card has one 24h / 7d / 30d control for its uptime, average ping, incident count, status bar, and ping chart, all from one request. The bar and the chart share a time axis, and a mouse or finger on either shows a cursor line with one tooltip for that slot (time, uptime, ping). The 24h bar of the closed card is hidden while the card is open.
+- Tooltips work with touch: the slot follows the finger along the bar or chart, and the page still scrolls vertically.
+- The 60-second refresh keeps open cards, their range, the sort tab, the scroll position, and keyboard focus, and refreshes the open card's data.
+
+### API
+
+- `/api/servers/{id}/history` has a new `bars` field (the status bar for the range, same cells as the status page). Nothing was removed or renamed.
+
 ## 1.2.0
 
 - **Settings → Maintenance**: update and restart the panel from the admin panel. Update runs the same update as menu item 2 (download, new virtualenv, swap, health check, rollback), through a small root unit (`v2uptime-control.path`) that the installer sets up; the panel itself still has no root access. The page follows the update, shows its log, and reloads when the new version is up. Restart stops the panel and systemd starts it again.
