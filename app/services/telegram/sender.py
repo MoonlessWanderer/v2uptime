@@ -15,6 +15,7 @@ from typing import Any, Callable, Iterable
 
 import httpx
 
+from app.services import net
 from app.services.proxy_pool import ProxyPool
 from app.services.settings import settings
 
@@ -58,7 +59,7 @@ ClientFactory = Callable[[str | None, httpx.Timeout], httpx.AsyncClient]
 
 
 def default_client_factory(proxy: str | None, timeout: httpx.Timeout) -> httpx.AsyncClient:
-    return httpx.AsyncClient(proxy=proxy, timeout=timeout, trust_env=False)
+    return net.async_client(proxy, timeout)
 
 
 class TelegramSender:

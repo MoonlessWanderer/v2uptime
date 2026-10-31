@@ -19,6 +19,7 @@ from typing import Awaitable, Callable
 import httpx
 
 from app.models import STATUS_FAIL, STATUS_OK, STATUS_UNKNOWN
+from app.services import net
 from app.services.settings import settings
 from app.services.xray_manager import XrayManager
 from app.timeutil import now_ts
@@ -129,22 +130,24 @@ def classify_exception(exc: BaseException, via_proxy: bool) -> tuple[str, str]:
 
 
 async def probe(url: str, proxy: str | None, timeout: float, accept_any_status: bool = False) -> ProbeResult:
-    """One HTTP GET; latency is the full request time (connect + TLS + response)."""
-    start = time.perf_counter()
+    """One HTTP GET; latency is the full request time (connect + TLS + response).
+
+    The client is built before the timer starts, so client setup is never
+    counted as network latency.
+    """
     try:
-        async with httpx.AsyncClient(
-            proxy=proxy, timeout=httpx.Timeout(timeout), follow_redirects=False, trust_env=False,
-            headers={"User-Agent": USER_AGENT},
-        ) as client:
+        async with net.async_client(proxy, httpx.Timeout(timeout), follow_redirects=False,
+                                    headers={"User-Agent": USER_AGENT}) as client:
             async def _request() -> int:
                 async with client.stream("GET", url) as response:
                     return response.status_code
 
+            start = time.perf_counter()
             status = await asyncio.wait_for(_request(), timeout)
+            latency = int((time.perf_counter() - start) * 1000)
     except Exception as exc:  # noqa: BLE001 - every failure is a result
         error_type, detail = classify_exception(exc, via_proxy=proxy is not None)
         return ProbeResult(False, None, error_type, detail)
-    latency = int((time.perf_counter() - start) * 1000)
     if (accept_any_status and status < 500) or 200 <= status < 300:
         return ProbeResult(True, latency, None, None, status)
     return ProbeResult(False, latency, E_HTTP, f"HTTP {status}", status)

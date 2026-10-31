@@ -17,6 +17,7 @@ import httpx
 
 from app.db import db, run_db
 from app.models import Server, Subscription
+from app.services import net
 from app.services.parser import LinkParseError, decode_subscription, parse_many
 from app.services.proxy_pool import ProxyPool
 from app.services.servers import apply_parsed, create_from_parsed
@@ -54,8 +55,8 @@ async def fetch_text(url: str, proxy_pool: ProxyPool | None, timeout: float = 20
     errors = []
     for proxy, label in routes:
         try:
-            async with httpx.AsyncClient(proxy=proxy, timeout=httpx.Timeout(timeout, connect=8), trust_env=False,
-                                         follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+            async with net.async_client(proxy, httpx.Timeout(timeout, connect=8), follow_redirects=True,
+                                        headers={"User-Agent": USER_AGENT}) as client:
                 response = await client.get(url)
             if response.status_code != 200:
                 errors.append(f"{label}: HTTP {response.status_code}")

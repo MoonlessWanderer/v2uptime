@@ -664,11 +664,16 @@ do_install() {
   local current_path admin_path
   current_path="$(app_cmd get-setting admin_path 2>/dev/null || echo /admin)"
   if [[ "$current_path" == "/admin" ]]; then
-    admin_path="$(ask "Admin panel path (hard to guess)" "/panel-$(head -c 64 /dev/urandom | tr -dc 'a-z0-9' | head -c 8)")"
-    app_cmd set-setting admin_path "$admin_path" >/dev/null
-  else
-    admin_path="$current_path"
+    local suggested
+    suggested="/panel-$(head -c 64 /dev/urandom | tr -dc 'a-z0-9' | head -c 8)"
+    while true; do
+      admin_path="$(ask "Admin panel path (hard to guess)" "$suggested")"
+      app_cmd set-setting admin_path "$admin_path" >/dev/null && break
+      warn "Invalid path: use letters, digits, - and _ (e.g. $suggested)."
+    done
   fi
+  # Print what was actually stored (the app normalises e.g. "ln" to "/ln").
+  admin_path="$(app_cmd get-setting admin_path)"
   create_admin
 
   write_service

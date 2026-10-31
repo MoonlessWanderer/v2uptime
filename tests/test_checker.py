@@ -1,9 +1,11 @@
 import asyncio
+import time
 
 import httpx
 import pytest
 
 from app.services import checker as checker_mod
+from app.services import net
 from app.services.checker import (
     E_MONITOR_NET,
     E_RESET,
@@ -112,6 +114,38 @@ def test_cycle_network_down(monkeypatch, database):
     xray = FakeXray({1: 20001, 2: 20002})
     report, _ = run_cycle_with(monkeypatch, database, xray, {20001: [FAIL], 20002: [FAIL]}, reference_ok=False)
     assert report.network_down and report.unknown == 2
+
+
+def test_ssl_context_built_once(monkeypatch):
+    calls = []
+    original = net.ssl.create_default_context
+
+    def counting(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(net.ssl, "create_default_context", counting)
+    net.ssl_context.cache_clear()
+    try:
+        clients = [net.async_client() for _ in range(5)]
+        assert len(calls) == 1
+        assert all(c._transport._pool._ssl_context is net.ssl_context() for c in clients)
+    finally:
+        net.ssl_context.cache_clear()
+
+
+def test_client_setup_is_not_counted_as_latency(monkeypatch):
+    original = httpx.AsyncClient
+
+    class SlowSetupClient(original):
+        def __init__(self, *args, **kwargs):
+            time.sleep(0.3)  # e.g. loading a CA bundle
+            kwargs.pop("proxy", None)
+            super().__init__(*args, transport=httpx.MockTransport(lambda request: httpx.Response(204)), **kwargs)
+
+    monkeypatch.setattr(checker_mod.httpx, "AsyncClient", SlowSetupClient)
+    result = asyncio.run(checker_mod.probe("https://x.test/", None, 5))
+    assert result.ok and result.latency_ms < 150
 
 
 @pytest.mark.parametrize("status_code, accept_any, ok", [(204, False, True), (200, False, True),
