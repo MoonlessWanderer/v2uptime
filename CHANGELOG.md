@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The public status page can be shown in English or Persian. The default is a setting; a visitor's choice is remembered for a year. Dates and digits stay as they were.
 - Config domains can be resolved with a primary and a secondary DNS (Settings → Monitoring). Fake answers in `10.10.34.0/24` are dropped. A failed check of a domain server is stored as DNS error, or DNS blocked when only a filtered answer comes back. This needs Xray 25.6.8 or newer.
 - Stored subscriptions are gone. Servers that came from one stay, as ordinary servers. A subscription URL in the add form is fetched once and its configs are saved like any other server; the URL is not kept and is not synced. The server list can make the selected rows public or hidden, or delete them and their history.
 - A mouse click on the 24h bar of a closed card opens the card. A touch on that bar still only moves the tooltip. The bar and chart inside an open card do not close it.

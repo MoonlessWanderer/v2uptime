@@ -123,15 +123,24 @@ def fmt_range(start: int | None, end: int | None, tz_name: str) -> str:
     return f"{start_text}–{fmt_datetime(end, tz_name)}"
 
 
-def fmt_duration(seconds: int | float | None, coarse: bool = False) -> str:
+def _duration_piece(count: int, suffix: str, lang: str) -> str:
+    from app.public_i18n import t
+
+    return t(f"dur_{suffix}", lang).replace("{n}", str(count))
+
+
+def fmt_duration(seconds: int | float | None, coarse: bool = False, lang: str = "en") -> str:
     """Largest non-zero unit, plus the next smaller unit when it is not zero.
 
     ``45s``, ``1m 30s``, ``1h`` (3601s), ``1h 1m``, ``1d`` (86401s), ``3d 4h``.
     ``coarse`` drops seconds once the span is at least a minute (``47m 2s`` → ``47m``).
-    Keep in step with ``formatDuration`` in ``static/js/time.js``.
+    ``lang`` changes the unit words only. Keep in step with ``formatDuration`` in ``static/js/time.js``.
     """
+    from app.public_i18n import normalize_lang, t
+
     if seconds is None:
         return _EMPTY
+    chosen = normalize_lang(lang)
     rem = int(max(0, seconds))
     values = []
     for suffix, size in _DURATION_UNITS:
@@ -139,25 +148,29 @@ def fmt_duration(seconds: int | float | None, coarse: bool = False) -> str:
         values.append((count, suffix))
     for index, (count, suffix) in enumerate(values):
         if count:
-            text = f"{count}{suffix}"
+            text = _duration_piece(count, suffix, chosen)
             nxt = index + 1
             if nxt < len(values) and values[nxt][0] and not (coarse and values[nxt][1] == "s"):
-                text += f" {values[nxt][0]}{values[nxt][1]}"
+                text += t("dur_join", chosen) + _duration_piece(values[nxt][0], values[nxt][1], chosen)
             return text
-    return "0s"
+    return _duration_piece(0, "s", chosen)
 
 
-def fmt_ago(ts: int | None, now: int | None = None) -> str:
+def fmt_ago(ts: int | None, now: int | None = None, lang: str = "en") -> str:
+    """Relative time. ``lang`` changes the words only."""
+    from app.public_i18n import normalize_lang, t
+
     if ts is None:
         return _EMPTY
+    chosen = normalize_lang(lang)
     delta = (now if now is not None else now_ts()) - int(ts)
     if delta < 60:
-        return "just now"
+        return t("ago_just", chosen)
     if delta < HOUR:
-        return f"{delta // 60}m ago"
+        return t("ago_m", chosen).replace("{n}", str(delta // 60))
     if delta < DAY:
-        return f"{delta // HOUR}h ago"
-    return f"{delta // DAY}d ago"
+        return t("ago_h", chosen).replace("{n}", str(delta // HOUR))
+    return t("ago_d", chosen).replace("{n}", str(delta // DAY))
 
 
 def fmt_percent(value: float | None, digits: int = 2) -> str:

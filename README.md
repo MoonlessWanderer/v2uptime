@@ -196,6 +196,14 @@ Saving a DNS server restarts Xray (the `dns` section cannot change over the API)
 
 When a check of a domain server fails, the panel resolves that name with the same chain. A failure is stored as **DNS error**. An answer that is only inside `10.10.34.0/24` is **DNS blocked (filtered answer)**. The admin server page, and `sudo v2uptime probe ID`, show the last addresses, which DNS answered (`primary`, `secondary`, or `system`), and the time. The result is cached for 60 seconds. The public page is unchanged.
 
+### Public page language
+
+Settings → General → **Public page language** (`en` or `fa`, default English). The status page header has an English / Persian switch beside the theme button. A `?lang=en` or `?lang=fa` link wins, then the `lang` cookie (one year, `SameSite=Lax`), then this default. The page is rendered in that language, and `/partials/live` uses it too, so the 60-second refresh does not switch back.
+
+Persian title, description, and test location are optional (`site_title_fa`, `site_description_fa`, `test_location_fa`). An empty one shows the main text. Dates stay Gregorian, digits stay `0-9`, and the clock stays 24-hour. The status bar and the ping chart stay left-to-right. The admin panel, the bot, the CLI, and the API stay English.
+
+![Persian status page](docs/screenshots/status-page-fa.jpg)
+
 Status, used by the public page, incidents, and Telegram:
 
 | Status | Rule |

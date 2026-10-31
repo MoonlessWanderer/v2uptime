@@ -3,12 +3,6 @@
 {% set degraded = data.summary.degraded %}
 {% set online = data.servers|selectattr('status', 'equalto', 'online')|rejectattr('collecting')|list|length %}
 {% set total = data.summary.total %}
-{% set noun = 'server' if total == 1 else 'servers' %}
 {% if total %}
-<p class="sr-only">
-{%- if online == total %}All {{ total }} {{ noun }} {{ 'is' if total == 1 else 'are' }} online
-{%- elif down %}{{ down }} of {{ total }} {{ noun }} {{ 'is' if down == 1 else 'are' }} down{% if degraded %}, {{ degraded }} degraded{% endif %}
-{%- elif degraded %}{{ degraded }} of {{ total }} {{ noun }} {{ 'is' if degraded == 1 else 'are' }} degraded
-{%- else %}{{ online }} of {{ total }} {{ noun }} {{ 'is' if online == 1 else 'are' }} online{% endif -%}
-</p>
+<p class="sr-only">{{ summary_sentence(total, online, down, degraded) }}</p>
 {% endif %}

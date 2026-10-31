@@ -1,6 +1,6 @@
 """Rebuild the README screenshots (docs/screenshots/*.jpg) from sample data.
 
-    python scripts/screenshots.py            # write the four images
+    python scripts/screenshots.py            # write the screenshots, including the Persian status page
     python scripts/screenshots.py --check    # layout, card, touch, refresh and flag-font checks (about 2 minutes)
 
 A temporary database gets sample servers and 24 hours of checks. The panel
@@ -257,6 +257,13 @@ def take_screenshots(browser, panel: Panel) -> None:
     settle(page)
     save_jpeg(page, OUT_DIR / "mobile.jpg", full_page=True)
     mobile.close()
+
+    persian = browser.new_context(viewport={"width": 1280, "height": 800}, color_scheme="dark")
+    page = persian.new_page()
+    page.goto(panel.url + "/?lang=fa")
+    settle(page)
+    save_jpeg(page, OUT_DIR / "status-page-fa.jpg", full_page=True)
+    persian.close()
 
     admin = browser.new_context(viewport={"width": 1280, "height": 900}, color_scheme="dark")
     page = admin.new_page()

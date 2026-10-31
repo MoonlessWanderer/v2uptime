@@ -13,7 +13,7 @@ from app.timeutil import now_ts
 
 ARABIC = re.compile(r"[\u0600-\u06FF]")
 ROOT = Path(__file__).resolve().parents[1]
-SKIP_NAMES = {"legacy_defaults.py"}
+SKIP_NAMES = {"legacy_defaults.py", "public_i18n.py"}
 SKIP_SUFFIXES = {".woff", ".woff2", ".ttf", ".otf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico"}
 
 

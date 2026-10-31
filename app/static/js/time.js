@@ -69,14 +69,50 @@
     return part.month + " " + pad(part.day);
   }
 
+  /* English words. Persian (and any override) comes from #i18n, built from the same dictionary. */
+  var EN = {
+    dur_d: "{n}d", dur_h: "{n}h", dur_m: "{n}m", dur_s: "{n}s", dur_join: " ",
+    ago_just: "just now", ago_m: "{n}m ago", ago_h: "{n}h ago", ago_d: "{n}d ago",
+    axis_24h: "24h ago", axis_now: "now", axis_today: "today"
+  };
+
+  function pageLang(explicit) {
+    if (explicit === "fa" || explicit === "en") return explicit;
+    var root = document.documentElement;
+    return root && root.lang === "fa" ? "fa" : "en";
+  }
+
+  function pack() {
+    if (pack.cache) return pack.cache;
+    var el = document.getElementById ? document.getElementById("i18n") : null;
+    try { pack.cache = el ? JSON.parse(el.textContent) : {}; }
+    catch (e) { pack.cache = {}; }
+    return pack.cache;
+  }
+
+  function word(key, lang) {
+    var chosen = pageLang(lang);
+    if (chosen === "fa") {
+      var value = pack()[key];
+      if (value) return value;
+    }
+    return EN[key] || key;
+  }
+
+  function piece(count, suffix, lang) {
+    return word("dur_" + suffix, lang).split("{n}").join(String(count));
+  }
+
   /* Largest non-zero unit, plus the next smaller one when it is not zero (same as fmt_duration).
-     coarse drops seconds once the span is at least a minute ("47m 2s" -> "47m"). */
+     coarse drops seconds once the span is at least a minute ("47m 2s" -> "47m").
+     lang changes the unit words only. */
   var UNITS = [["d", 86400], ["h", 3600], ["m", 60], ["s", 1]];
-  function formatDuration(seconds, coarse) {
+  function formatDuration(seconds, coarse, lang) {
     if (seconds === null || seconds === undefined || seconds === "") return EMPTY;
     var rem = Math.floor(Number(seconds));
     if (!isFinite(rem)) return EMPTY;
     if (rem < 0) rem = 0;
+    var chosen = pageLang(lang);
     var counts = UNITS.map(function (unit) {
       var count = Math.floor(rem / unit[1]);
       rem -= count * unit[1];
@@ -84,23 +120,28 @@
     });
     for (var i = 0; i < counts.length; i++) {
       if (!counts[i]) continue;
-      var text = counts[i] + UNITS[i][0];
+      var text = piece(counts[i], UNITS[i][0], chosen);
       if (i + 1 < counts.length && counts[i + 1] && !(coarse && UNITS[i + 1][0] === "s")) {
-        text += " " + counts[i + 1] + UNITS[i + 1][0];
+        text += word("dur_join", chosen) + piece(counts[i + 1], UNITS[i + 1][0], chosen);
       }
       return text;
     }
-    return "0s";
+    return piece(0, "s", chosen);
   }
 
-  function formatAgo(value, nowMs) {
+  function formatAgo(value, nowMs, lang) {
     var date = toDate(value);
     if (!date) return EMPTY;
+    var chosen = pageLang(lang);
     var delta = Math.floor(((nowMs || Date.now()) - date.getTime()) / 1000);
-    if (delta < 60) return "just now";
-    if (delta < 3600) return Math.floor(delta / 60) + "m ago";
-    if (delta < 86400) return Math.floor(delta / 3600) + "h ago";
-    return Math.floor(delta / 86400) + "d ago";
+    if (delta < 60) return word("ago_just", chosen);
+    if (delta < 3600) return word("ago_m", chosen).split("{n}").join(String(Math.floor(delta / 60)));
+    if (delta < 86400) return word("ago_h", chosen).split("{n}").join(String(Math.floor(delta / 3600)));
+    return word("ago_d", chosen).split("{n}").join(String(Math.floor(delta / 86400)));
+  }
+
+  function axisLabel(kind, lang) {
+    return word(kind, lang);
   }
 
   function tick() {
@@ -119,6 +160,8 @@
     formatDateTime: formatDateTime,
     formatMonthDay: formatMonthDay,
     formatDuration: formatDuration,
-    formatAgo: formatAgo
+    formatAgo: formatAgo,
+    axisLabel: axisLabel,
+    word: word
   };
 })();

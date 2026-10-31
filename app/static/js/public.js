@@ -7,8 +7,8 @@
 
   var REFRESH_MS = 60000;
   var RANGES = ["24h", "7d", "30d"];
-  var RANGE_WORDS = { "24h": "24 hours", "7d": "7 days", "30d": "30 days" };
   var T = window.UptimeTime;
+  var ISO_L = "\u2068", ISO_R = "\u2069";
   var list = document.getElementById("live-list");
   var tooltip = document.getElementById("tooltip");
   var emptySearch = document.getElementById("empty-search");
@@ -112,10 +112,12 @@
     timeline._range = range;
     var bars = timeline.querySelector(".range-bars");
     bars.innerHTML = data.bars.map(function (b) { return '<i class="b lv-' + b.level + '"></i>'; }).join("");
-    bars.setAttribute("aria-label", "Status for the last " + RANGE_WORDS[range]);
+    var rangeWord = T.word("range_long_" + range);
+    bars.setAttribute("aria-label", fill("aria_status", { range: rangeWord }));
     var canvas = timeline.querySelector("canvas");
-    canvas.setAttribute("aria-label", "Ping over the last " + RANGE_WORDS[range] +
-      (avg === null || avg === undefined ? ", no data" : ", average " + Math.round(avg) + " ms"));
+    canvas.setAttribute("aria-label", avg === null || avg === undefined
+      ? fill("aria_ping_empty", { range: rangeWord })
+      : fill("aria_ping", { range: rangeWord, ms: String(Math.round(avg)) }));
     if (window.MiniChart) window.MiniChart.timeline(canvas, { points: data.points, bars: data.bars, range: range });
   }
 
@@ -179,13 +181,24 @@
     if (barsEl && barsEl.children[index]) barsEl.children[index].classList.add("is-hover");
   }
 
+  function fill(key, map) {
+    var text = T.word(key);
+    Object.keys(map).forEach(function (name) { text = text.split("{" + name + "}").join(map[name]); });
+    return text;
+  }
+
+  function iso(text) { return ISO_L + text + ISO_R; }
+
   function spanText(start, end, range) {
     if (range === "30d") return T.formatMonthDay(start);
     var clock = T.formatTime(start) + "–" + T.formatTime(end);
     return range === "7d" ? T.formatMonthDay(start) + " " + clock : clock;
   }
 
-  function uptimeText(u) { return u === null || u === undefined || u === "" ? "no data" : percent(u) + " uptime"; }
+  function uptimeText(u) {
+    if (u === null || u === undefined || u === "") return T.word("tip_nodata");
+    return fill("tip_uptime", { value: iso(percent(u)) });
+  }
 
   function pingIn(points, start, end) {
     var from = Date.parse(start), to = Date.parse(end), sum = 0, n = 0;
@@ -214,7 +227,7 @@
     var cells = barsEl.children, n = cells.length;
     if (!n || !T) return;
     var i = indexAt(barsEl, clientX, n), item = buckets()[i] || {};
-    var text = spanText(item.start, item.end, "24h") + " · " + uptimeText(cells[i].getAttribute("data-u"));
+    var text = iso(spanText(item.start, item.end, "24h")) + " · " + uptimeText(cells[i].getAttribute("data-u"));
     highlight(barsEl, i);
     var t = showTip(text), cell = cells[i].getBoundingClientRect(), top = barsEl.getBoundingClientRect().top;
     tooltip.style.left = clamp(cell.left + cell.width / 2 - t.width / 2, 8, window.innerWidth - t.width - 8) + "px";
@@ -229,8 +242,8 @@
     if (!data || !data.bars.length || !T) return;
     var n = data.bars.length, i = indexAt(timeline, clientX, n), b = data.bars[i];
     var ping = pingIn(data.points, b.start, b.end);
-    var text = spanText(b.start, b.end, timeline._range) + " · " + uptimeText(b.uptime) + " · " +
-      (ping === null ? "no ping" : Math.round(ping) + " ms");
+    var pingText = ping === null ? T.word("tip_noping") : iso(Math.round(ping) + " ms");
+    var text = iso(spanText(b.start, b.end, timeline._range)) + " · " + uptimeText(b.uptime) + " · " + pingText;
     var box = timeline.getBoundingClientRect(), x = (i + 0.5) / n * box.width;
     var cursor = timeline.querySelector(".cursor");
     cursor.style.left = x + "px";

@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% block html_lang %}{{ lang }}{% endblock %}
+{% block html_dir %}{{ dir }}{% endblock %}
 {% block title %}{{ data.site.title }}{% endblock %}
 {% block body_class %}public{% endblock %}
 {% block body %}
@@ -6,10 +8,17 @@
   <header class="page-top">
     <div class="page-top-row">
       <h1><bdi>{{ data.site.title }}</bdi></h1>
-      <button class="icon-btn theme-toggle" type="button" aria-label="Toggle color theme" data-theme-toggle>
-        <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg>
-        <svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
-      </button>
+      <div class="page-top-actions">
+        <div class="lang-switch" role="group" aria-label="{{ t('language') }}">
+          <a href="?lang=en" hreflang="en" lang="en" {% if lang == 'en' %}class="is-active" aria-current="true"{% endif %}>{{ t('lang_en') }}</a>
+          <span aria-hidden="true">|</span>
+          <a href="?lang=fa" hreflang="fa" lang="fa" {% if lang == 'fa' %}class="is-active" aria-current="true"{% endif %}>{{ t('lang_fa') }}</a>
+        </div>
+        <button class="icon-btn theme-toggle" type="button" aria-label="{{ t('theme') }}" data-theme-toggle>
+          <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
+      </div>
     </div>
     {% if data.site.description %}<p class="fine"><bdi>{{ data.site.description }}</bdi></p>{% endif %}
   </header>
@@ -17,26 +26,27 @@
   <main id="main">
     <div id="live-summary" aria-live="polite">{% include "public/_summary.html" %}</div>
     <div class="sort-row">
-      <div class="segmented" role="tablist" aria-label="Sort">
-        <button role="tab" type="button" class="seg is-active" data-tab="all" aria-selected="true">All</button>
-        <button role="tab" type="button" class="seg" data-tab="fastest" aria-selected="false">Fastest</button>
-        <button role="tab" type="button" class="seg" data-tab="stable" aria-selected="false">Most stable</button>
+      <div class="segmented" role="tablist" aria-label="{{ t('sort') }}">
+        <button role="tab" type="button" class="seg is-active" data-tab="all" aria-selected="true">{{ t('tab_all') }}</button>
+        <button role="tab" type="button" class="seg" data-tab="fastest" aria-selected="false">{{ t('tab_fastest') }}</button>
+        <button role="tab" type="button" class="seg" data-tab="stable" aria-selected="false">{{ t('tab_stable') }}</button>
       </div>
       {% if data.servers|length > 15 %}
       <label class="search">
         <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-        <input type="search" id="q" placeholder="Search servers…" autocomplete="off" aria-label="Search servers">
+        <input type="search" id="q" placeholder="{{ t('search_placeholder') }}" autocomplete="off" aria-label="{{ t('search_label') }}">
       </label>
       {% endif %}
     </div>
 
     <div id="live-list">{% include "public/_list.html" %}</div>
-    <p class="empty" id="empty-search" hidden>No matching servers.</p>
+    <p class="empty" id="empty-search" hidden>{{ t('no_match') }}</p>
   </main>
 
-  <footer class="site-footer fine">Auto-refreshes every 60s · Times are shown in {{ tz_label(settings.tz) }} ({{ settings.tz }})</footer>
+  <footer class="site-footer fine">{{ t('footer_refresh') }} · {{ t('footer_times') }} <bdi>{{ tz_label(settings.tz) }}</bdi> (<bdi>{{ settings.tz }}</bdi>)</footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+<script type="application/json" id="i18n">{{ i18n|tojson }}</script>
 {% endblock %}
 {% block scripts %}
 <script src="{{ static_url('js/time.js') }}" defer></script>

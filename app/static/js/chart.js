@@ -201,19 +201,19 @@
     var T = window.UptimeTime, ticks = [];
     if (!T || !bars.length) return ticks;
     if (range === "24h") {
-      ticks.push({ t: start, text: "24h ago", align: "left" });
+      ticks.push({ t: start, text: T.axisLabel("axis_24h"), align: "left" });
       bars.forEach(function (b) {
         var hm = T.formatTime(b.start);
         if (/^(00|06|12|18):00$/.test(hm)) ticks.push({ t: Date.parse(b.start), text: hm, align: "center" });
       });
-      ticks.push({ t: end, text: "now", align: "right" });
+      ticks.push({ t: end, text: T.axisLabel("axis_now"), align: "right" });
     } else if (range === "7d") {
       var midnights = bars.filter(function (b) { return T.formatTime(b.start) === "00:00"; });
       for (var k = midnights.length - 1; k >= 0; k -= 2) {
         ticks.push({ t: Date.parse(midnights[k].start), text: T.formatMonthDay(midnights[k].start), align: "center" });
       }
     } else {
-      ticks.push({ t: end, text: "today", align: "right" });
+      ticks.push({ t: end, text: T.axisLabel("axis_today"), align: "right" });
       for (var d = bars.length - 9; d >= 0; d -= 8) {
         var mid = (Date.parse(bars[d].start) + Date.parse(bars[d].end)) / 2;
         ticks.push({ t: mid, text: T.formatMonthDay(bars[d].start), align: "center" });

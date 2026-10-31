@@ -6,57 +6,58 @@
   {% set rank_fast = data.order.fastest.index(s.id) + 1 if s.id in data.order.fastest else "" %}
   {% set rank_stable = data.order.stable.index(s.id) + 1 if s.id in data.order.stable else "" %}
   {% set incident = s.last_incident %}
+  {% set label = status_text(s.status, s.collecting) %}
   <li class="card" data-id="{{ s.id }}" data-order="{{ loop.index }}" data-collecting="{{ '1' if s.collecting else '0' }}"
       data-rank-fastest="{{ rank_fast }}" data-rank-stable="{{ rank_stable }}" data-status="{{ s.status }}"
       data-search="{{ (s.name ~ ' ' ~ s.protocol ~ ' ' ~ s.country ~ ' ' ~ s.tags|join(' '))|lower }}">
     <button type="button" class="card-main" aria-expanded="false" aria-controls="detail-{{ s.id }}">
       <span class="card-line card-top">
         <span class="card-name" title="{{ s.name }}"><bdi>{{ s.name }}</bdi></span>
-        <span class="card-ping{{ ' is-empty' if s.ping_ms is none }}">{{ s.ping_ms|ms }}</span>
+        <span class="card-ping{{ ' is-empty' if s.ping_ms is none }}"><bdi>{{ s.ping_ms|ms }}</bdi></span>
       </span>
       <span class="card-gap" aria-hidden="true"></span>
       <span class="card-line card-sub">
         <span class="card-state"><span class="status-dot{% if not s.collecting %} {{ s.status }}{% endif %}"></span>
-          {%- if s.collecting %}<strong>{{ s.status_label }}</strong> · Collecting data
-          {%- elif s.status == 'offline' %}<strong>{{ s.status_label }}{% if incident and not incident.ended_at %} for {{ incident.duration_seconds|duration(true) }}{% endif %}</strong> · <span class="card-up">{{ s.uptime_24h|percent }}</span> uptime
-          {%- elif s.uptime_24h is none %}<strong>{{ s.status_label }}</strong> · No recent checks
-          {%- else %}<strong>{{ s.status_label }}</strong> · <span class="card-up">{{ s.uptime_24h|percent }}</span> uptime{% endif -%}
+          {%- if s.collecting %}<strong>{{ label }}</strong> · {{ t('collecting') }}
+          {%- elif s.status == 'offline' %}<strong>{% if lang == 'fa' and incident and not incident.ended_at %}<bdi>{{ incident.duration_seconds|duration(true) }}</bdi> {{ label }}{% elif incident and not incident.ended_at %}{{ label }} {{ t('for') }} <bdi>{{ incident.duration_seconds|duration(true) }}</bdi>{% else %}{{ label }}{% endif %}</strong> · <span class="card-up"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}
+          {%- elif s.uptime_24h is none %}<strong>{{ label }}</strong> · {{ t('no_checks') }}
+          {%- else %}<strong>{{ label }}</strong> · <span class="card-up"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}{% endif -%}
         </span>
-        <span class="card-range">24h<svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></span>
+        <span class="card-range">{{ t('range_24h') }}<svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></span>
       </span>
     </button>
-    <div class="bars card-bars" role="img" aria-label="Status for the last 24 hours">
+    <div class="bars card-bars" dir="ltr" role="img" aria-label="{{ t('aria_bars') }}">
       {%- for b in s.bars -%}
       <i class="b lv-{{ b.level }}" data-u="{{ b.uptime if b.uptime is not none else '' }}"></i>
       {%- endfor -%}
     </div>
     <div class="card-detail" id="detail-{{ s.id }}" hidden>
-      <div class="segmented range-seg" role="group" aria-label="Range">
-        <button type="button" class="seg is-active" data-range="24h" aria-pressed="true">24h</button>
-        <button type="button" class="seg" data-range="7d" aria-pressed="false">7d</button>
-        <button type="button" class="seg" data-range="30d" aria-pressed="false">30d</button>
+      <div class="segmented range-seg" role="group" aria-label="{{ t('range_group') }}">
+        <button type="button" class="seg is-active" data-range="24h" aria-pressed="true">{{ t('range_24h') }}</button>
+        <button type="button" class="seg" data-range="7d" aria-pressed="false">{{ t('range_7d') }}</button>
+        <button type="button" class="seg" data-range="30d" aria-pressed="false">{{ t('range_30d') }}</button>
       </div>
       <dl class="card-stats">
-        <div><dt>Uptime</dt><dd data-stat="uptime">…</dd></div>
-        <div><dt>Avg ping</dt><dd data-stat="ping">…</dd></div>
-        <div><dt>Incidents</dt><dd data-stat="incidents">…</dd></div>
+        <div><dt>{{ t('stat_uptime') }}</dt><dd data-stat="uptime">…</dd></div>
+        <div><dt>{{ t('stat_ping') }}</dt><dd data-stat="ping">…</dd></div>
+        <div><dt>{{ t('stat_incidents') }}</dt><dd data-stat="incidents">…</dd></div>
       </dl>
-      <div class="timeline is-loading">
-        <div class="bars range-bars" role="img" aria-label="Status for the selected range"></div>
-        <div class="chart"><canvas role="img" aria-label="Ping chart"></canvas></div>
+      <div class="timeline is-loading" dir="ltr">
+        <div class="bars range-bars" dir="ltr" role="img" aria-label="{{ t('aria_bars_range') }}"></div>
+        <div class="chart"><canvas role="img" aria-label="{{ t('aria_chart') }}"></canvas></div>
         <span class="cursor" hidden></span>
       </div>
       <p class="fine card-incident">
-        {%- if incident and not incident.ended_at %}Down since {{ incident.started_at|time_tag("ago") }}
-        {%- elif incident %}Last incident: {{ incident.started_at|time_tag("ago") }} · lasted {{ incident.duration_seconds|duration }}
-        {%- else %}No incidents in the last 30 days{% endif -%}
+        {%- if incident and not incident.ended_at %}{{ t('down_since') }} {{ incident.started_at|time_tag("ago") }}
+        {%- elif incident %}{{ t('last_incident') }} {{ incident.started_at|time_tag("ago") }} · {{ t('lasted') }} <bdi>{{ incident.duration_seconds|duration }}</bdi>
+        {%- else %}{{ t('no_incidents') }}{% endif -%}
       </p>
     </div>
   </li>
   {% endfor %}
 </ul>
-<p class="fine check-line">Last check: {{ data.last_check_at|time_tag }}{% if data.site.location %} · Test location: <bdi>{{ data.site.location }}</bdi>{% endif %}</p>
+<p class="fine check-line">{{ t('last_check') }} {{ data.last_check_at|time_tag }}{% if data.site.location %} · {{ t('test_location') }} <bdi>{{ data.site.location }}</bdi>{% endif %}</p>
 {% else %}
-<div class="empty"><p>No servers to show yet.</p></div>
+<div class="empty"><p>{{ t('empty') }}</p></div>
 {% endif %}
 </div>

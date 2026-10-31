@@ -19,6 +19,7 @@ from app.db import init_db
 from app.routers import admin, api, public
 from app.services.container import Services
 from app.services.settings import settings
+from app.public_i18n import t as public_t
 from app.web import ADMIN_INTERNAL_PREFIX, STATIC_DIR, admin_url, render
 
 log = logging.getLogger(__name__)
@@ -119,9 +120,18 @@ def create_app(cfg: Config | None = None, background: bool = True) -> FastAPI:
         if path.startswith("/api/") or path.startswith("/internal/") or "application/json" in \
                 request.headers.get("accept", "") or "application/json" in request.headers.get("content-type", ""):
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
-        message = exc.detail if isinstance(exc.detail, str) and exc.status_code != 404 else "Page not found."
-        return render(request, "error.html", {"code": exc.status_code, "message": message},
-                      status_code=exc.status_code)
+        public_page = not path.startswith(("/api/", "/internal/", "/__admin", "/static"))
+        lang = public.public_lang(request) if public_page else "en"
+        if isinstance(exc.detail, str) and exc.status_code != 404:
+            message = exc.detail
+        elif public_page:
+            message = public_t("error_404", lang)
+        else:
+            message = "Page not found."
+        response = render(request, "error.html", {"code": exc.status_code, "message": message, "lang": lang,
+                                                  "dir": "rtl" if lang == "fa" else "ltr"},
+                          status_code=exc.status_code)
+        return public.remember_lang(response, request, lang) if public_page else response
 
     return app
 

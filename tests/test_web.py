@@ -223,9 +223,14 @@ def _assert_latin(label, text):
     assert match is None, f"{label} contains U+{ord(match.group()):04X}"
 
 
+def _without_lang_switch(html):
+    """The switch is labelled EN | فا on every language. The rest of an English page is Latin."""
+    return re.sub(r'<div class="lang-switch".*?</div>', "", html, count=1, flags=re.S)
+
+
 def test_rendered_pages_and_api_are_english(client, seeded):
     visible = seeded[0]
-    _assert_latin("public", client.get("/").text)
+    _assert_latin("public", _without_lang_switch(client.get("/").text))
     _assert_latin("login", client.get("/admin/login").text)
     login(client)
     for path in ("/admin", "/admin/servers", "/admin/incidents", "/admin/settings",
@@ -396,7 +401,7 @@ def test_closed_cards_show_name_ping_bar_and_status(client):
         card = _row(page, server.id)
         assert f'title="{server.name}"><bdi>{server.name}</bdi>' in card
         assert len(re.findall(r'<i class="b lv-', card.split('class="card-detail"')[0])) == 48
-        ping = re.search(r'<span class="card-ping[^"]*">([^<]*)</span>', card).group(1)
+        ping = re.sub(r"<[^>]+>", "", re.search(r'<span class="card-ping[^"]*">(.*?)</span>', card).group(1))
         assert ping == (f"{cards[server.id]['ping_ms']} ms" if cards[server.id]["ping_ms"] is not None else "—")
     up = {key: fmt_percent(cards[s.id]["uptime_24h"]) for key, s in servers.items()}
     down_for = fmt_duration(cards[servers["down"].id]["last_incident"]["duration_seconds"], coarse=True)
@@ -404,7 +409,7 @@ def test_closed_cards_show_name_ping_bar_and_status(client):
     assert _card_state(_row(page, servers["degraded"].id)) == f"Degraded · {up['degraded']} uptime"
     assert _card_state(_row(page, servers["down"].id)) == f"Down for {down_for} · {up['down']} uptime"
     assert _card_state(_row(page, servers["new"].id)) == "New · Collecting data"
-    assert 'class="card-ping is-empty">—</span>' in _row(page, servers["down"].id)
+    assert 'class="card-ping is-empty"><bdi>—</bdi></span>' in _row(page, servers["down"].id)
     assert "Down since" in _row(page, servers["down"].id)
     for button in re.findall(r"<button\b.*?</button>", page, re.S):
         assert 'class="bars' not in button and 'class="timeline' not in button
