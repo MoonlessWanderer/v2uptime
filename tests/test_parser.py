@@ -1,5 +1,6 @@
 import base64
 import json
+from urllib.parse import quote
 
 import pytest
 
@@ -7,7 +8,6 @@ from app.services.parser import (
     LinkParseError,
     country_from_remark,
     decode_subscription,
-    flag_emoji,
     parse_link,
     parse_many,
 )
@@ -250,8 +250,18 @@ def test_default_name_never_leaks_address():
     assert "secret" not in p.default_name and p.default_name.startswith("VLESS-")
 
 
-def test_flags():
-    assert country_from_remark("🇳🇱 Amsterdam") == "NL"
-    assert country_from_remark("no flag") == ""
-    assert flag_emoji("de") == "🇩🇪"
-    assert flag_emoji("") == ""
+@pytest.mark.parametrize("remark, country", [
+    ("🇩🇪 Germany | Reality", "DE"),
+    ("Germany 🇩🇪", "DE"),
+    ("🇩🇪", "DE"),
+    ("🇮🇷➡️🇩🇪 Tunnel", "DE"),  # tunnel: the last flag is the exit country
+    ("🇩 broken 🇪", ""),  # lone letters are not a flag
+    ("🇩🇪🇫", "DE"),  # unfinished pair ignored
+    ("Plain name", ""),
+    ("آلمان 🇩🇪 ویژه", "DE"),
+    ("🇳🇱 Amsterdam", "NL"),
+])
+def test_country_from_remark(remark, country):
+    assert country_from_remark(remark) == country
+    parsed = parse_link(f"vless://{UUID}@h.example.com:443?type=tcp#{quote(remark)}")
+    assert parsed.default_name == remark and parsed.country == country

@@ -25,6 +25,7 @@ def save_checks(records: list[CheckRecord]) -> None:
     rows = [{
         "server": r.server_id, "checked_at": r.checked_at, "status": r.status, "latency_ms": r.latency_ms,
         "error_type": r.error_type, "error_detail": (r.error_detail or "")[:300] or None,
+        "connect_ms": r.connect_ms,
     } for r in records]
     with db.atomic():
         for start in range(0, len(rows), 300):

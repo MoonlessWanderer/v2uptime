@@ -3,7 +3,7 @@
   "use strict";
 
   var REFRESH_MS = 60000;
-  var live = document.getElementById("live");
+  var list = document.getElementById("live-list");
   var tooltip = document.getElementById("tooltip");
   var emptySearch = document.getElementById("empty-search");
   var search = document.getElementById("q");
@@ -94,6 +94,19 @@
     });
   }
 
+  /* Replace a summary line only when what it says changed, so the live region is not re-read. */
+  function swapSummary(fresh) {
+    var current = document.getElementById("live-summary");
+    if (!current || !fresh) return;
+    var now = current.children, next = fresh.children;
+    if (now.length !== next.length) { current.innerHTML = fresh.innerHTML; return; }
+    for (var i = 0; i < next.length; i++) {
+      if (now[i].textContent !== next[i].textContent || now[i].className !== next[i].className) {
+        current.replaceChild(document.importNode(next[i], true), now[i]);
+      }
+    }
+  }
+
   var refreshing = false;
   function refresh() {
     if (refreshing || document.hidden) return;
@@ -108,7 +121,11 @@
     fetch("/partials/live?range=24h", { headers: { "Accept": "text/html" } })
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.text(); })
       .then(function (html) {
-        live.innerHTML = html;
+        var doc = new DOMParser().parseFromString(html, "text/html");
+        var freshList = doc.getElementById("live-list");
+        if (!freshList) throw new Error("unexpected fragment");
+        swapSummary(doc.getElementById("live-summary"));
+        list.innerHTML = freshList.innerHTML;
         applyView();
         restore();
         window.scrollTo(0, y);
@@ -132,7 +149,7 @@
     });
   }
 
-  live.addEventListener("click", function (e) {
+  list.addEventListener("click", function (e) {
     var rangeBtn = e.target.closest(".chart-range [data-range]");
     if (rangeBtn) {
       var row = rangeBtn.closest("#servers > li");
@@ -172,11 +189,11 @@
     tooltip.style.top = Math.max(8, r.top - t.height - 8) + "px";
   }
   function hideTip() { tooltip.hidden = true; }
-  live.addEventListener("pointerover", function (e) {
+  list.addEventListener("pointerover", function (e) {
     var bar = e.target.closest(".b");
     if (bar && e.pointerType === "mouse") showTip(bar);
   });
-  live.addEventListener("pointerout", function (e) {
+  list.addEventListener("pointerout", function (e) {
     if (e.pointerType === "mouse" && e.target.closest(".b")) hideTip();
   });
   window.addEventListener("scroll", hideTip, { passive: true });

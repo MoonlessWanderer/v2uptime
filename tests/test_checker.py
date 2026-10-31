@@ -1,5 +1,9 @@
 import asyncio
+import logging
+import socket
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import pytest
@@ -17,6 +21,8 @@ from app.services.checker import (
     apply_network_rule,
     classify_exception,
 )
+
+from tests.conftest import make_server
 
 OK = ProbeResult(True, 120)
 FAIL = ProbeResult(False, None, E_TIMEOUT, "timeout")
@@ -166,3 +172,204 @@ def test_probe_status_handling(monkeypatch, status_code, accept_any, ok):
     assert result.ok is ok
     if not ok:
         assert result.error_type == "http_status"
+
+
+# ------------------------------------------------- cold + warm requests
+
+class _ConnectCostHandler(BaseHTTPRequestHandler):
+    """Delays only the first request of each connection (the cost of opening it)."""
+
+    protocol_version = "HTTP/1.1"  # keep-alive
+
+    def setup(self):
+        super().setup()
+        self.served = 0
+
+    def log_message(self, *args):
+        pass
+
+    def do_GET(self):
+        self.served += 1
+        self.server.counts[self.client_address] = self.served
+        if self.served == 1:
+            time.sleep(0.3)
+        elif self.server.mode == "drop":  # second request: close without answering
+            self.close_connection = True
+            return
+        elif self.server.mode == "hang":
+            time.sleep(3)
+        if self.server.mode == "slow-body":  # headers at once, body 3 seconds later
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.flush()
+            time.sleep(3)
+            self.wfile.write(b"ok")
+            return
+        self.send_response(204)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+
+def _recv_exact(sock, size):
+    data = b""
+    while len(data) < size:
+        chunk = sock.recv(size - len(data))
+        if not chunk:
+            raise OSError("closed")
+        data += chunk
+    return data
+
+
+def _pipe(src, dst):
+    try:
+        while True:
+            data = src.recv(65536)
+            if not data:
+                break
+            dst.sendall(data)
+    except OSError:
+        pass
+    finally:
+        for sock in (src, dst):
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+
+
+def _socks5_handle(client):
+    """No-auth SOCKS5 CONNECT, standing in for an Xray SOCKS inbound."""
+    try:
+        greeting = _recv_exact(client, 2)
+        _recv_exact(client, greeting[1])
+        client.sendall(b"\x05\x00")
+        _ver, _cmd, _rsv, atyp = _recv_exact(client, 4)
+        if atyp == 1:
+            host = socket.inet_ntoa(_recv_exact(client, 4))
+        else:
+            host = _recv_exact(client, _recv_exact(client, 1)[0]).decode()
+        port = int.from_bytes(_recv_exact(client, 2), "big")
+        upstream = socket.create_connection((host, port))
+        client.sendall(b"\x05\x00\x00\x01" + bytes(6))
+    except OSError:
+        client.close()
+        return
+    threading.Thread(target=_pipe, args=(client, upstream), daemon=True).start()
+    _pipe(upstream, client)
+
+
+@pytest.fixture
+def connect_cost_server():
+    servers = []
+
+    def start(mode="ok"):
+        server = ThreadingHTTPServer(("127.0.0.1", 0), _ConnectCostHandler)
+        server.daemon_threads, server.block_on_close = True, False
+        server.mode, server.counts = mode, {}
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        servers.append(server)
+        return server, f"http://127.0.0.1:{server.server_address[1]}/generate_204"
+
+    yield start
+    for server in servers:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture
+def socks_port():
+    listener = socket.create_server(("127.0.0.1", 0))
+
+    def serve():
+        while True:
+            try:
+                client, _ = listener.accept()
+            except OSError:
+                return
+            threading.Thread(target=_socks5_handle, args=(client,), daemon=True).start()
+
+    threading.Thread(target=serve, daemon=True).start()
+    yield listener.getsockname()[1]
+    listener.close()
+
+
+def test_ping_is_the_warm_request_and_connect_ms_the_cold_one(connect_cost_server, socks_port):
+    server, url = connect_cost_server()
+    checker = Checker(FakeXray({1: socks_port}), on_cycle=None)
+    result = asyncio.run(checker.check_server(socks_port, 5, url))  # through SOCKS, like production
+    assert result.ok and result.warm and result.status_code == 204
+    assert result.connect_ms >= 300
+    assert result.latency_ms < 100
+
+
+def test_both_requests_share_one_connection(connect_cost_server, socks_port):
+    server, url = connect_cost_server()
+    for _ in range(3):
+        assert asyncio.run(checker_mod.probe(url, checker_mod.socks_url(socks_port), 5)).ok
+    assert list(server.counts.values()) == [2, 2, 2]  # one connection per check, two requests on each
+
+
+def test_reference_check_stays_one_cold_request(connect_cost_server):
+    server, url = connect_cost_server()
+    result = asyncio.run(checker_mod.probe(url, None, 5, accept_any_status=True))
+    assert result.ok and not result.warm
+    assert result.latency_ms == result.connect_ms >= 300
+    assert list(server.counts.values()) == [1]
+
+
+def test_reference_check_does_not_wait_for_the_body(connect_cost_server):
+    _server, url = connect_cost_server("slow-body")
+    started = time.perf_counter()
+    result = asyncio.run(checker_mod.probe(url, None, 5, accept_any_status=True))
+    assert result.ok and result.status_code == 200
+    assert time.perf_counter() - started < 2
+
+
+@pytest.mark.parametrize("mode", ["drop", "hang"])
+def test_failed_warm_request_falls_back_to_cold_time(connect_cost_server, mode, caplog):
+    server, url = connect_cost_server(mode)
+    timeout = 0.8
+    started = time.perf_counter()
+    with caplog.at_level(logging.DEBUG, logger="app.services.checker"):
+        result = asyncio.run(checker_mod.probe(url, None, timeout, warm=True))
+    elapsed = time.perf_counter() - started
+    assert result.ok and not result.warm
+    assert result.latency_ms == result.connect_ms >= 300
+    assert elapsed < 2 * timeout
+    assert any("warm request" in r.getMessage() and r.levelno == logging.DEBUG for r in caplog.records)
+
+
+def test_cycle_records_connect_ms(monkeypatch, database):
+    from app.models import Check
+    from app.services.monitor import save_checks
+
+    xray = FakeXray({1: 20001, 2: 20002})
+    make_server("A", port=20001), make_server("B", port=20002)
+    report, _ = run_cycle_with(monkeypatch, database, xray, {
+        20001: [ProbeResult(True, 140, status_code=204, connect_ms=520, warm=True)],
+        20002: [FAIL, FAIL]})
+    by_id = {r.server_id: r for r in report.records}
+    assert (by_id[1].latency_ms, by_id[1].connect_ms) == (140, 520)
+    assert (by_id[2].latency_ms, by_id[2].connect_ms) == (None, None)
+    save_checks(report.records)
+    assert {c.server_id: c.connect_ms for c in Check.select()} == {1: 520, 2: None}
+
+
+def test_probe_command_prints_cold_warm_and_phases(connect_cost_server, socks_port, database, monkeypatch, capsys):
+    from app import cli
+    from app.services.settings import settings
+
+    _server, url = connect_cost_server()
+    server = make_server("🇩🇪 Germany", port=socks_port)
+    settings.set("test_url", url)
+    monkeypatch.setattr(cli, "_open_db", lambda: None)  # the test database is already open
+    cli.main(["probe", str(server.id), "--count", "2"])
+    out = capsys.readouterr().out
+    assert "Server 1: 🇩🇪 Germany (vless/tcp/none)" in out
+    lines = [line for line in out.splitlines() if line.startswith("#")]
+    assert len(lines) == 2
+    for line in lines:
+        assert "cold " in line and "warm " in line and "HTTP 204" in line
+        assert "tcp " in line and "socks " in line and "ttfb " in line
+    assert out.splitlines()[-2].startswith("Median: cold ")

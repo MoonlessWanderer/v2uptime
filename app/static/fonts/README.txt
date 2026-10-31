@@ -7,3 +7,7 @@ fonts/webfonts/Vazirmatn[wght].woff2 from https://github.com/rastikerdar/vazirma
 and save it here as Vazirmatn-Variable.woff2.
 
 Without the file the pages fall back to Tahoma / system fonts.
+
+TwemojiCountryFlags.woff2 (Twemoji artwork, CC BY 4.0) is committed here. It is
+used only where the browser cannot draw flag emoji itself (Chrome and Edge on
+Windows); see TwemojiCountryFlags-LICENSE.txt and app/static/js/flags.js.

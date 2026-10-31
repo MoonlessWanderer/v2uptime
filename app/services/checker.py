@@ -1,9 +1,11 @@
 """Connection test engine.
 
-Every ``check_interval`` seconds each server loaded in Xray is tested by an
-HTTP request through its local SOCKS inbound (``socks5h``: DNS is resolved
-through the tunnel).  A failed test is retried once immediately; only the
-final result is recorded.  A direct "reference" request to a domestic site
+Every ``check_interval`` seconds each server loaded in Xray is tested by
+HTTP requests through its local SOCKS inbound (``socks5h``: DNS is resolved
+through the tunnel).  Two requests go over one keep-alive connection: the
+first (cold) one decides success and its full time, handshakes included, is
+``connect_ms``; the second (warm) one is the ping, ``latency_ms``.  A failed
+test is retried once immediately; only the final result is recorded.  A direct "reference" request to a domestic site
 detects when the monitor's own internet is down: if every server *and* the
 reference fail together, the cycle's results are stored as ``unknown``.
 """
@@ -63,10 +65,12 @@ def error_label(error_type: str | None) -> str:
 @dataclass
 class ProbeResult:
     ok: bool
-    latency_ms: int | None = None
+    latency_ms: int | None = None  # warm request (ping); the cold time when no warm request was made
     error_type: str | None = None
     detail: str | None = None
     status_code: int | None = None
+    connect_ms: int | None = None  # cold request: new connection, handshakes and response
+    warm: bool = False  # latency_ms came from the warm request
 
 
 @dataclass
@@ -77,6 +81,7 @@ class CheckRecord:
     latency_ms: int | None
     error_type: str | None
     error_detail: str | None = None
+    connect_ms: int | None = None
 
 
 @dataclass
@@ -129,28 +134,94 @@ def classify_exception(exc: BaseException, via_proxy: bool) -> tuple[str, str]:
     return E_UNKNOWN, detail
 
 
-async def probe(url: str, proxy: str | None, timeout: float, accept_any_status: bool = False) -> ProbeResult:
-    """One HTTP GET; latency is the full request time (connect + TLS + response).
+class PhaseTimer:
+    """httpx ``trace`` hook: milliseconds spent in each connection phase of one request."""
 
-    The client is built before the timer starts, so client setup is never
+    def __init__(self) -> None:
+        self.phases: dict[str, int] = {}
+        self._started: dict[str, float] = {}
+
+    async def __call__(self, name: str, info: dict) -> None:
+        stage, _, edge = name.rpartition(".")
+        stage = stage.split(".", 1)[-1]  # drop the "socks." / "connection." / "http11." prefix
+        if edge == "started":
+            self._started[stage] = time.perf_counter()
+        elif edge in ("complete", "failed") and stage in self._started:
+            self.phases[stage] = int((time.perf_counter() - self._started.pop(stage)) * 1000)
+
+
+async def _get(client: httpx.AsyncClient, url: str, timeout: float, timer: PhaseTimer | None = None,
+               read_body: bool = True) -> tuple[int, int]:
+    """One GET: (status, ms).
+
+    With ``read_body`` the body is read to the end, so the connection goes
+    back to the pool for the next request. Without it only the headers are
+    awaited (one-off requests such as the reference check).
+    """
+    extensions = {"trace": timer} if timer else None
+
+    async def request() -> int:
+        async with client.stream("GET", url, extensions=extensions) as response:
+            if read_body:
+                await response.aread()
+            return response.status_code
+
+    start = time.perf_counter()
+    status = await asyncio.wait_for(request(), timeout)
+    return status, int((time.perf_counter() - start) * 1000)
+
+
+async def probe(url: str, proxy: str | None, timeout: float, accept_any_status: bool = False, *,
+                warm: bool | None = None, timers: list[PhaseTimer] | None = None) -> ProbeResult:
+    """Cold request, then (``warm``) a second request on the same keep-alive connection.
+
+    The cold request decides success, the HTTP status and the error type; its
+    time is ``connect_ms``. The warm request's time is ``latency_ms``, the
+    round trip of one request over an open connection (what 3x-ui calls
+    delay). If the warm request fails, the check still succeeds and
+    ``latency_ms`` is the cold time. Each request gets ``timeout``, so a
+    check takes at most ``2 × timeout``.
+
+    ``warm`` defaults to true for checks through a server (``proxy`` set) and
+    false for direct requests such as the reference check. ``timers``, when
+    given, receives one :class:`PhaseTimer` per request (``v2uptime probe``).
+    The client is built before any timer starts, so client setup is never
     counted as network latency.
     """
+    if warm is None:
+        warm = proxy is not None
+
+    def passes(code: int) -> bool:
+        return (accept_any_status and code < 500) or 200 <= code < 300
+
+    def timer() -> PhaseTimer | None:
+        if timers is None:
+            return None
+        timers.append(PhaseTimer())
+        return timers[-1]
+
     try:
         async with net.async_client(proxy, httpx.Timeout(timeout), follow_redirects=False,
                                     headers={"User-Agent": USER_AGENT}) as client:
-            async def _request() -> int:
-                async with client.stream("GET", url) as response:
-                    return response.status_code
-
-            start = time.perf_counter()
-            status = await asyncio.wait_for(_request(), timeout)
-            latency = int((time.perf_counter() - start) * 1000)
+            status, connect_ms = await _get(client, url, timeout, timer(), read_body=warm)
+            latency, warm_used = connect_ms, False
+            if warm and passes(status):
+                try:
+                    warm_status, warm_ms = await _get(client, url, timeout, timer())
+                    if passes(warm_status):
+                        latency, warm_used = warm_ms, True
+                    else:
+                        log.debug("warm request got a bad status; using the cold time",
+                                  extra={"status": warm_status, "connect_ms": connect_ms})
+                except Exception as exc:  # noqa: BLE001 - the cold request already succeeded
+                    log.debug("warm request failed; using the cold time",
+                              extra={"error": _exception_chain_text(exc)[:300], "connect_ms": connect_ms})
     except Exception as exc:  # noqa: BLE001 - every failure is a result
         error_type, detail = classify_exception(exc, via_proxy=proxy is not None)
         return ProbeResult(False, None, error_type, detail)
-    if (accept_any_status and status < 500) or 200 <= status < 300:
-        return ProbeResult(True, latency, None, None, status)
-    return ProbeResult(False, latency, E_HTTP, f"HTTP {status}", status)
+    if passes(status):
+        return ProbeResult(True, latency, None, None, status, connect_ms, warm=warm_used)
+    return ProbeResult(False, connect_ms, E_HTTP, f"HTTP {status}", status, connect_ms)
 
 
 def socks_url(port: int) -> str:
@@ -253,6 +324,7 @@ class Checker:
                 server_id=server_id, checked_at=times[server_id], status=status,
                 latency_ms=result.latency_ms if status == STATUS_OK else None,
                 error_type=result.error_type, error_detail=result.detail,
+                connect_ms=result.connect_ms if status == STATUS_OK else None,
             ))
         report.checked = len(report.records)
         report.ok = sum(r.status == STATUS_OK for r in report.records)

@@ -15,6 +15,7 @@
   </header>
 
   <main id="main">
+    <div id="live-summary" aria-live="polite">{% include "public/_summary.html" %}</div>
     <div class="sort-row">
       <div class="segmented" role="tablist" aria-label="Sort">
         <button role="tab" type="button" class="seg is-active" data-tab="all" aria-selected="true">All</button>
@@ -29,9 +30,7 @@
       {% endif %}
     </div>
 
-    <div id="live">
-      {% include "public/_live.html" %}
-    </div>
+    <div id="live-list">{% include "public/_list.html" %}</div>
     <p class="empty" id="empty-search" hidden>No matching servers.</p>
   </main>
 

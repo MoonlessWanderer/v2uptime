@@ -69,23 +69,25 @@
     return part.month + " " + pad(part.day);
   }
 
+  /* Largest non-zero unit, plus the next smaller one when it is not zero (same as fmt_duration). */
+  var UNITS = [["d", 86400], ["h", 3600], ["m", 60], ["s", 1]];
   function formatDuration(seconds) {
     if (seconds === null || seconds === undefined || seconds === "") return EMPTY;
-    var total = Math.floor(Number(seconds));
-    if (!isFinite(total)) return EMPTY;
-    if (total < 0) total = 0;
-    var days = Math.floor(total / 86400);
-    var rem = total % 86400;
-    var hours = Math.floor(rem / 3600);
-    rem %= 3600;
-    var minutes = Math.floor(rem / 60);
-    var secs = rem % 60;
-    var units = [];
-    if (days) units.push(days + "d");
-    if (hours) units.push(hours + "h");
-    if (minutes) units.push(minutes + "m");
-    if (secs || !units.length) units.push(secs + "s");
-    return units.slice(0, 2).join(" ");
+    var rem = Math.floor(Number(seconds));
+    if (!isFinite(rem)) return EMPTY;
+    if (rem < 0) rem = 0;
+    var counts = UNITS.map(function (unit) {
+      var count = Math.floor(rem / unit[1]);
+      rem -= count * unit[1];
+      return count;
+    });
+    for (var i = 0; i < counts.length; i++) {
+      if (!counts[i]) continue;
+      var text = counts[i] + UNITS[i][0];
+      if (i + 1 < counts.length && counts[i + 1]) text += " " + counts[i + 1] + UNITS[i + 1][0];
+      return text;
+    }
+    return "0s";
   }
 
   function formatAgo(value, nowMs) {

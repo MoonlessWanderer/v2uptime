@@ -14,3 +14,4 @@ venv/
 *.db-shm
 .claude/
 app/static/fonts/*.woff2
+!app/static/fonts/TwemojiCountryFlags.woff2

@@ -1,0 +1,17 @@
+{% set down = data.summary.offline %}
+{% set degraded = data.summary.degraded %}
+{% set online = data.servers|selectattr('status', 'equalto', 'online')|rejectattr('collecting')|list|length %}
+{% set total = data.summary.total %}
+{% set noun = 'server' if total == 1 else 'servers' %}
+{% if total %}
+{% if online == total %}
+<p class="banner banner-ok">✓ All servers are online</p>
+{% elif down %}
+<p class="banner banner-bad">{{ down }} of {{ total }} {{ noun }} {{ 'is' if down == 1 else 'are' }} down{% if degraded %} · {{ degraded }} degraded{% endif %}</p>
+{% elif degraded %}
+<p class="banner banner-warn">{{ degraded }} of {{ total }} {{ noun }} {{ 'is' if degraded == 1 else 'are' }} degraded</p>
+{% else %}
+<p class="banner banner-wait">{{ online }} of {{ total }} {{ noun }} {{ 'is' if online == 1 else 'are' }} online</p>
+{% endif %}
+<p class="fine check-line">Last check: {{ data.last_check_at|time_tag }}{% if data.site.location %} · Test location: <bdi>{{ data.site.location }}</bdi>{% endif %}</p>
+{% endif %}

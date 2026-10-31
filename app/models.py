@@ -94,9 +94,10 @@ class Check(BaseModel):
     server = ForeignKeyField(Server, backref="checks", on_delete="CASCADE")
     checked_at = IntegerField(index=True)
     status = CharField(max_length=8)  # ok / fail / unknown
-    latency_ms = IntegerField(null=True)
+    latency_ms = IntegerField(null=True)  # warm request: the ping shown everywhere
     error_type = CharField(max_length=32, null=True)
     error_detail = CharField(max_length=300, null=True)
+    connect_ms = IntegerField(null=True)  # cold request: new connection with handshakes
 
     class Meta:
         table_name = "checks"

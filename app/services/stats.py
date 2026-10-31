@@ -5,6 +5,8 @@ Definitions (documented in README):
 * **Uptime %** = ok / (ok + fail).  ``unknown`` checks are ignored.
   24h comes from raw checks; 7d / 30d from ``HourlyStat`` plus raw checks
   newer than the aggregator's progress (``agg_until``).
+* **Ping** (public list) = median latency of successful checks in the last
+  10 minutes, or the last value when there are none.
 * **Speed** = median / mean latency of successful checks in the last hour.
 * **Jitter** = standard deviation of successful-check latency over 24h.
 * **Stability score** (0-100)::
@@ -29,16 +31,15 @@ from typing import Any, Callable, Iterable
 
 from app.db import db
 from app.models import Incident, Server
-from app.services.parser import flag_emoji
 from app.services.settings import settings
 from app.services.status import (
     DEGRADED,
     OFFLINE,
     ONLINE,
-    STATUS_LABELS,
     UNKNOWN,
     LiveRegistry,
     classify_status,
+    display_label,
 )
 from app.services.aggregator import percentile
 from app.services.checker import error_label
@@ -63,6 +64,7 @@ RANGE_LABELS = {"24h": "24h", "7d": "7d", "30d": "30d"}
 BAR_SPEC: dict[str, tuple[int, int]] = {"24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY)}
 HISTORY_STEP: dict[str, int] = {"24h": 300, "7d": HOUR, "30d": 6 * HOUR}
 MIN_CHECKS_FOR_RANKING = 10
+PING_WINDOW = 600  # public ping: median of the successful checks in the last 10 minutes
 JITTER_REFERENCE_MS = 500.0
 CACHE_TTL = 60.0
 
@@ -147,6 +149,7 @@ class ServerMetrics:
     name: str = ""
     status: str = UNKNOWN
     latency_ms: int | None = None
+    ping_ms: int | None = None
     last_check_at: int | None = None
     last_error: str | None = None
     uptime_24h: float | None = None
@@ -383,6 +386,8 @@ class StatsService:
             m.last_check_at = last.ts
             m.latency_ms = last.latency_ms if last.status == "ok" else None
             m.last_error = last.error_type if last.status == "fail" else None
+        recent = self.live.recent_latencies(server_id, now - PING_WINDOW)
+        m.ping_ms = _round(median(recent), 0) if recent else m.latency_ms
         latencies = self.live.recent_latencies(server_id, now - HOUR)
         m.median_1h = median(latencies)
         m.avg_1h = sum(latencies) / len(latencies) if latencies else None
@@ -449,9 +454,9 @@ class StatsService:
                 })
             cards.append({
                 "id": server.id, "name": server.name, "country": server.country,
-                "flag": flag_emoji(server.country), "protocol": server.protocol, "transport": server.transport,
-                "tags": server.tag_list, "status": m.status, "status_label": STATUS_LABELS[m.status],
-                "latency_ms": m.latency_ms, "uptime_24h": _round(m.uptime_24h, 2),
+                "protocol": server.protocol, "transport": server.transport,
+                "tags": server.tag_list, "status": m.status, "status_label": display_label(m.status, m.collecting),
+                "latency_ms": m.latency_ms, "ping_ms": m.ping_ms, "uptime_24h": _round(m.uptime_24h, 2),
                 "uptime_7d": _round(m.uptime_7d, 2), "uptime_30d": _round(m.uptime_30d, 2),
                 "median_1h": _round(m.median_1h, 0), "avg_1h": _round(m.avg_1h, 0),
                 "stability": m.stability, "collecting": m.collecting,
@@ -526,9 +531,10 @@ class StatsService:
         m = self.server_metrics().get(server_id) or self.live_metrics(server_id, now)
         return {
             "server": {
-                "id": server.id, "name": server.name, "flag": flag_emoji(server.country),
+                "id": server.id, "name": server.name, "country": server.country,
                 "protocol": server.protocol, "transport": server.transport,
-                "status": m.status, "status_label": STATUS_LABELS[m.status],
+                "status": m.status, "status_label": display_label(m.status, m.collecting),
+                "collecting": m.collecting,
                 "latency_ms": m.latency_ms, "median_1h": _round(m.median_1h, 0), "stability": m.stability,
             },
             "range": range_key,

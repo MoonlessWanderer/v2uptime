@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 HOUR = 3600
 DAY = 86400
 _EMPTY = "—"
+_DURATION_UNITS = (("d", DAY), ("h", HOUR), ("m", 60), ("s", 1))
 
 
 def now_ts() -> int:
@@ -107,33 +108,41 @@ def fmt_time(ts: int | None, tz_name: str) -> str:
 
 
 def fmt_range(start: int | None, end: int | None, tz_name: str) -> str:
-    """Date plus a clock range, e.g. ``2026-10-31 12:00–12:30``."""
+    """Date plus a clock range, e.g. ``2026-10-31 12:00–12:30``.
+
+    A range that ends exactly at the next local midnight keeps one date
+    (``2026-10-30 23:30–00:00``); the end date is written only when the
+    range really runs into the next day.
+    """
     if start is None or end is None:
         return _EMPTY
     start_text = fmt_datetime(start, tz_name)
-    if fmt_date(start, tz_name) == fmt_date(end, tz_name):
+    next_midnight = add_local_days(local_midnight(start, tz_name), 1, tz_name)
+    if fmt_date(start, tz_name) == fmt_date(end, tz_name) or end == next_midnight:
         return f"{start_text}–{fmt_time(end, tz_name)}"
     return f"{start_text}–{fmt_datetime(end, tz_name)}"
 
 
 def fmt_duration(seconds: int | float | None) -> str:
-    """Two largest non-zero units: ``45s``, ``1m``, ``2h 15m``, ``3d 4h``."""
+    """Largest non-zero unit, plus the next smaller unit when it is not zero.
+
+    ``45s``, ``1m 30s``, ``1h`` (3601s), ``1h 1m``, ``1d`` (86401s), ``3d 4h``.
+    Keep in step with ``formatDuration`` in ``static/js/time.js``.
+    """
     if seconds is None:
         return _EMPTY
-    total = int(max(0, seconds))
-    days, rem = divmod(total, DAY)
-    hours, rem = divmod(rem, HOUR)
-    minutes, secs = divmod(rem, 60)
-    parts: list[str] = []
-    if days:
-        parts.append(f"{days}d")
-    if hours:
-        parts.append(f"{hours}h")
-    if minutes:
-        parts.append(f"{minutes}m")
-    if secs or not parts:
-        parts.append(f"{secs}s")
-    return " ".join(parts[:2])
+    rem = int(max(0, seconds))
+    values = []
+    for suffix, size in _DURATION_UNITS:
+        count, rem = divmod(rem, size)
+        values.append((count, suffix))
+    for index, (count, suffix) in enumerate(values):
+        if count:
+            text = f"{count}{suffix}"
+            if index + 1 < len(values) and values[index + 1][0]:
+                text += f" {values[index + 1][0]}{values[index + 1][1]}"
+            return text
+    return "0s"
 
 
 def fmt_ago(ts: int | None, now: int | None = None) -> str:

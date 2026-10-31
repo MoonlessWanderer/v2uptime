@@ -37,7 +37,7 @@ from app.services.settings import (
 from app.services.stats import RANGES, incident_stats
 from app.services.subscriptions import validate_url
 from app.services.telegram.outbox_worker import queue_stats
-from app.timeutil import now_ts
+from app.timeutil import DAY, now_ts
 from app.web import ADMIN_INTERNAL_PREFIX, admin_url, render
 
 router = APIRouter(prefix=ADMIN_INTERNAL_PREFIX, include_in_schema=False)
@@ -241,8 +241,11 @@ async def server_detail(request: Request, server_id: int):
         checks = list(Check.select().where(Check.server == server_id).order_by(Check.checked_at.desc()).limit(200))
         incidents = list(Incident.select().where(Incident.server == server_id)
                          .order_by(Incident.started_at.desc()).limit(50))
+        connect_avg = (Check.select(fn.AVG(Check.connect_ms))
+                       .where(Check.server == server_id, Check.checked_at >= now - DAY,
+                              Check.connect_ms.is_null(False)).scalar())
         return {"server": server, "stats": stats, "checks": checks, "incidents": incidents,
-                "metrics": svc.stats.server_metrics().get(server_id)}
+                "metrics": svc.stats.server_metrics().get(server_id), "connect_avg": connect_avg}
 
     data = await run_db(load)
     if not data:
@@ -330,8 +333,9 @@ async def server_test(request: Request, server_id: int):
     await require_admin(request)
     await checked_json(request)
     result = await services(request).checker.test_now(server_id)
-    return {"ok": result.ok, "latency_ms": result.latency_ms, "error": error_label(result.error_type) if not result.ok
-            else None, "detail": result.detail if not result.ok else None}
+    return {"ok": result.ok, "latency_ms": result.latency_ms, "connect_ms": result.connect_ms,
+            "error": error_label(result.error_type) if not result.ok else None,
+            "detail": result.detail if not result.ok else None}
 
 
 # ---------------------------------------------------------- subscriptions

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from app.services.checker import error_label
 from app.services.settings import settings
 from app.services.status import STATUS_EMOJI, STATUS_LABELS
-from app.timeutil import fmt_datetime, fmt_duration, fmt_ms, fmt_percent, fmt_time, tz_label
+from app.timeutil import fmt_date, fmt_datetime, fmt_duration, fmt_ms, fmt_percent, fmt_time, tz_label
 
 MAX_LEN = 4096
 SAFE_LEN = 4000  # margin under Telegram's 4096 limit
@@ -41,6 +41,14 @@ def t(ts: int | None) -> str:
 
 def clock(ts: int | None) -> str:
     return fmt_time(ts, settings.tz)
+
+
+def span(start: int, end: int) -> str:
+    """``18:28 → 18:40`` within one local day; with dates when the range crosses days."""
+    zone = settings.tz
+    if fmt_date(start, zone) == fmt_date(end, zone):
+        return f"{clock(start)} → {clock(end)}"
+    return f"{fmt_datetime(start, zone)} → {fmt_datetime(end, zone)}"
 
 
 def ms(value: float | None) -> str:
@@ -95,7 +103,7 @@ def server_down(name: str, started_at: int, error_type: str | None, uptime_24h: 
 
 def server_up(name: str, started_at: int, ended_at: int, duration: int | None) -> str:
     return (f"🟢 <b>Server back online: {bidi(name)}</b>\n"
-            f"Downtime: {fmt_duration(duration)} ({clock(started_at)} → {clock(ended_at)})")
+            f"Downtime: {fmt_duration(duration)} ({span(started_at, ended_at)})")
 
 
 def flapping(name: str, count: int, window_minutes: int, at: int) -> str:
@@ -122,9 +130,7 @@ def network_down(at: int, servers: int) -> str:
 
 def network_up(started_at: int, ended_at: int) -> str:
     return (f"🌐 <b>Monitor network restored</b>\n"
-            f"Downtime: <b>{fmt_duration(ended_at - started_at)}</b>\n"
-            f"Since: {t(started_at)}\n"
-            f"Until: {t(ended_at)}")
+            f"Downtime: <b>{fmt_duration(ended_at - started_at)}</b> ({span(started_at, ended_at)})")
 
 
 def xray_crash(at: int, code: int | None, detail: str) -> str:

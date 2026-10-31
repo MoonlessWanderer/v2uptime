@@ -4,7 +4,7 @@ v2uptime checks V2Ray share links by connecting through Xray, on a timer (60 sec
 
 ## Overview
 
-One Xray process serves every server. Each server gets a local SOCKS inbound. A check opens a fresh connection through that inbound, completes the tunnel (including TLS or REALITY), and requests the configured test URL. A 2xx response is a success. Latency is the full request time, not an ICMP ping.
+One Xray process serves every server. Each server gets a local SOCKS inbound. A check sends two requests to the configured test URL over one keep-alive connection through that inbound. The first (cold) request opens the connection: the tunnel to the server (including TLS or REALITY) and the connection to the test host. It decides the result; a 2xx response is a success. Its time is stored as the **connect time**. The second (warm) request runs on the connection that is already open. Its time is the **Ping**: the round trip of one request through the server, the same idea as the delay in 3x-ui. It is not an ICMP ping.
 
 The public page lists each server’s status, ping, and uptime. The admin panel adds servers, subscriptions, incidents, Telegram, and settings. Share links, addresses, and ports are not shown on the public page, in the public API, or in Telegram messages.
 
@@ -15,8 +15,9 @@ The public page lists each server’s status, ping, and uptime. The admin panel 
 - Add, edit, and remove servers through the Xray API while the process stays up. If a hot reload fails, Xray restarts once and the check cycle that overlapped the restart is discarded.
 - Detects when the monitor’s own internet is down (a direct reference request) and keeps those results out of uptime.
 - Incidents use an N/M rule. Flapping is detected. Incident stats include count, downtime, mean time to recover, and longest outage.
-- Public page: one status banner, a server list (flag, status, ping, 24h uptime), Fastest and Most stable sorting, and a row that opens 24h/7d/30d uptime, a 24h status bar, the last incident, and a ping chart. Light and dark theme. Refreshes every 60 seconds.
+- Public page: one status banner, a server list (name, status, ping, 24h uptime), Fastest and Most stable sorting, and a row that opens 24h/7d/30d uptime, a 24h status bar, the last incident, and a ping chart. Light and dark theme. Refreshes every 60 seconds.
 - Telegram bot with a durable queue. Messages go out directly, or through an online server when `api.telegram.org` is not reachable from the monitor.
+- Server names are shown exactly as written in the config, everywhere (public page, admin, Telegram, API). A flag is shown only when it is part of the name; none is added.
 - Fonts, icons, and charts are served by the app. No third-party CDN.
 - One-command install, a management menu, and support for a proxy, mirrors, and an offline archive.
 
@@ -137,6 +138,8 @@ A recovery:
 Downtime: 12m (18:28 → 18:40)
 ```
 
+When the outage crosses midnight, both ends include the date: `Downtime: 1d 2h (2026-10-30 18:28 → 2026-10-31 20:40)`. The monitor network restore message uses the same format.
+
 If the message left the queue at least 2 minutes late, a line is added: `Delivered 14m late.`
 
 The daily and weekly reports are one line per server (uptime, ping, incident count, downtime), then Fastest and Most stable. The first run does not send a report immediately; the next scheduled time does.
@@ -171,6 +174,8 @@ Status, used by the public page, incidents, and Telegram:
 | Online | The last check succeeded and latency is under the threshold. |
 | Unknown | Fewer than 2 valid checks, or the last valid check is older than 3 intervals. |
 
+- Ping = the warm request time (see Overview). It is the value used for the Degraded threshold, Fastest, jitter, and the stability score. If the warm request fails but the cold one succeeded, the check still counts as a success and its ping is the cold time. The public list shows the median ping of the successful checks in the last 10 minutes (the last value when there are none).
+- Connect time = the cold request time. The admin server page shows its 24h average. **Test now** shows both, for example `OK · 142 ms (connect 520 ms)`.
 - Uptime % = `ok / (ok + fail)`. `unknown` checks (monitor network outage, Xray unavailable) are left out.
 - Fastest ranks online servers that are not still collecting, by the median latency of the last hour.
 - Most stable ranks servers that are not still collecting, by the 24h stability score.
@@ -189,13 +194,15 @@ The app listens on `127.0.0.1` only (nginx in front). It runs as one worker beca
 
 Read-only. Responses do not include share links, addresses, or ports. Hidden and inactive servers are omitted; asking for one by id returns 404.
 
-- `GET /api/status?range=24h|7d|30d` — summary, status, and metrics for every public server, status bars for the range, and the Fastest and Most stable order.
+- `GET /api/status?range=24h|7d|30d` — summary, status, and metrics for every public server, status bars for the range, and the Fastest and Most stable order. Each server has `latency_ms` (last check) and `ping_ms` (the 10-minute median shown on the page).
 - `GET /api/servers/{id}/history?range=24h|7d|30d` — ping and uptime series, a range summary, and incidents.
 - `GET /healthz` — process health.
 
 Responses are cached for at most 60 seconds and are invalidated after each check cycle.
 
 Timestamps are RFC 3339 UTC (`2026-10-31T14:58:00Z`). `*_label` fields are Gregorian, 24-hour, with Latin digits (`2026-10-31 18:28`). `range_label` is `24h`, `7d`, or `30d`. Status and history payloads include `timezone`: `{"name": "Asia/Tehran", "offset": "+03:30"}`. Each server in `/api/status` has `last_incident` (`started_at`, `ended_at` or `null`, `duration_seconds`), or `null` when there was no incident in the last 30 days. History incidents include `started_at` and `ended_at` (ISO, or `null` while the incident is open) as well as the labels. A missing server returns `404` with `{"detail": "Server not found"}`.
+
+`name` is the config name exactly as written. The `flag` field has been removed from `/api/status` and `/api/servers/{id}/history`; `country` (two letters, or empty) is still there. It comes from the last flag in the name, or is set by hand on the edit page. `status_label` is `New` while a server has fewer than 10 valid checks in 24 hours (`collecting: true`); `status` keeps its real value, such as `unknown`.
 
 The `use_jalali` setting has been removed. API errors are English.
 
@@ -211,7 +218,18 @@ python3 -m pytest
 
 For a real connectivity test, put the Xray binary at `bin/xray` (Windows: `bin\xray.exe`). Without it, the pages still load and no checks run.
 
-Other commands: `reset-password`, `set-setting KEY VALUE`, `get-setting KEY`, `backup-db -o FILE`.
+Other commands: `reset-password`, `set-setting KEY VALUE`, `get-setting KEY`, `backup-db -o FILE`, `probe ID [--count N]`.
+
+The README screenshots are made by a script. It builds a temporary database with sample servers and 24 hours of checks, runs the panel on localhost with a stand-in for Xray (`tests/fake_xray.py`), and saves `docs/screenshots/*.jpg` with Playwright (Chromium, dark theme):
+
+```bash
+.venv/bin/pip install playwright
+.venv/bin/python -m playwright install chromium
+.venv/bin/python scripts/screenshots.py           # writes docs/screenshots/
+.venv/bin/python scripts/screenshots.py --check   # layout and flag-font checks only, no files written
+```
+
+Nothing from your own `config.py` or database is used.
 
 ## Troubleshooting
 
@@ -225,3 +243,9 @@ Other commands: `reset-password`, `set-setting KEY VALUE`, `get-setting KEY`, `b
 | Admin password forgotten | `sudo v2uptime`, then 10 (Reset admin password). |
 | Logs | `journalctl -u v2uptime -f`, or `/opt/v2uptime/logs/app.log` (JSON, rotated). |
 | certbot fails | Port 80 open, DNS correct, or use an existing certificate from menu item 6. |
+| Ping looks higher than expected | Run `sudo v2uptime probe ID --count 5` (ID is in the admin URL of the server). It prints the cold request (with tcp, SOCKS, TLS, and time-to-first-byte phases) and the warm request for each try. The panel shows the warm time as Ping. A test URL with `http://` instead of `https://` skips the TLS handshake to the test host. |
+| Flags show as two letters (`DE`) | Windows has no flag glyphs. The pages detect this and load the bundled flag font, so names show flags in Chrome and Edge too. Two places use the system font and still show letters on Windows: the browser tab title and the browser’s own tooltip on hover (the `title` attribute). |
+
+## Credits
+
+The flag font `app/static/fonts/TwemojiCountryFlags.woff2` comes unmodified from [country-flag-emoji-polyfill](https://github.com/talkjs/country-flag-emoji-polyfill) by TalkJS. The flag artwork is from [Twemoji](https://github.com/twitter/twemoji), © Twitter, Inc. and other contributors, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See `app/static/fonts/TwemojiCountryFlags-LICENSE.txt`.

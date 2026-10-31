@@ -2,7 +2,7 @@
 {% block page_title %}{{ server.name }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{{ flag_emoji(server.country) }} <bdi>{{ server.name }}</bdi></h1>
+  <h1><bdi>{{ server.name }}</bdi></h1>
   <div class="form-actions" style="margin:0">
     <button type="button" class="btn" data-test="{{ server.id }}"><svg class="ic"><use href="#i-play"/></svg>Test now</button>
     <span class="test-result" data-result-for="{{ server.id }}"></span>
@@ -21,6 +21,7 @@
       <dt>Public</dt><dd>{{ 'Yes' if server.is_public else 'No (hidden)' }}</dd>
       {% if metrics %}
       <dt>Ping now / median 1h</dt><dd>{{ metrics.latency_ms|ms }} / {{ metrics.median_1h|ms }}</dd>
+      <dt>Connect time</dt><dd>{{ connect_avg|ms }} <small class="muted">(24h average)</small><br><small class="muted">Time to open a new connection through this server, including handshakes.</small></dd>
       <dt>Uptime 24h / 7d / 30d</dt><dd>{{ metrics.uptime_24h|percent }} / {{ metrics.uptime_7d|percent }} / {{ metrics.uptime_30d|percent }}</dd>
       <dt>Jitter / stability score</dt><dd>{{ metrics.jitter_24h|ms }} / {{ metrics.stability if metrics.stability is not none else '—' }}</dd>
       {% endif %}

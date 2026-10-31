@@ -249,3 +249,96 @@ def test_persian_server_name_is_isolated(client):
     login(client)
     admin = client.get("/admin/servers")
     assert f"<bdi>{name}</bdi>" in admin.text
+
+
+def _row(html, server_id):
+    match = re.search(rf'<li data-id="{server_id}".*?</li>', html, re.S)
+    assert match, f"row {server_id} not found"
+    return match.group(0)
+
+
+def test_new_label_is_the_same_on_page_and_api(client):
+    now = now_ts()
+    fresh = make_server("Fresh", port=20011)
+    add_checks(fresh, now - 120, "o")  # one check: still collecting data
+    settled = make_server("Settled", port=20012)
+    add_checks(settled, now - 3 * 3600, "o" * 20)  # enough data, but nothing recent: unknown, not collecting
+    cards = {s["id"]: s for s in client.get("/api/status").json()["servers"]}
+    assert (cards[fresh.id]["status"], cards[fresh.id]["status_label"], cards[fresh.id]["collecting"]) == \
+        ("unknown", "New", True)
+    assert (cards[settled.id]["status"], cards[settled.id]["status_label"], cards[settled.id]["collecting"]) == \
+        ("unknown", "Unknown", False)
+    for server, label in ((fresh, "New"), (settled, "Unknown")):
+        history = client.get(f"/api/servers/{server.id}/history").json()["server"]
+        assert history["status"] == "unknown" and history["status_label"] == label
+        row_status = re.search(r'class="row-status[^"]*">(.*?)</span>\s*<span class="row-ping"',
+                               _row(client.get("/").text, server.id), re.S).group(1)
+        assert re.sub(r"<[^>]+>", "", row_status).strip() == label
+
+
+# Remark -> stored country. Names are shown exactly as written; no flag is ever added.
+REMARKS = [
+    ("🇩🇪 Germany | Reality", "DE"),
+    ("Germany 🇩🇪", "DE"),
+    ("🇩🇪", "DE"),
+    ("🇮🇷➡️🇩🇪 Tunnel", "DE"),
+    ("🇩 broken 🇪", ""),
+    ("Plain name", "NL"),  # no flag in the name; country set by hand
+    ("آلمان 🇩🇪 ویژه", "DE"),
+]
+
+
+def _flag_letters(text):
+    return [c for c in text if 0x1F1E6 <= ord(c) <= 0x1F1FF]
+
+
+def _without_names(text):
+    for name, _ in sorted(REMARKS, key=lambda item: len(item[0]), reverse=True):
+        text = text.replace(name, "").replace(name.lower(), "")
+    return text
+
+
+def test_names_are_shown_exactly_as_written(client):
+    from urllib.parse import quote
+
+    from app.services.telegram import messages
+    from tests.conftest import UUID
+
+    login(client)
+    headers = {"X-CSRF-Token": csrf_from(client.get("/admin/servers").text)}
+    links = "\n".join(f"vless://{UUID}@h{i}.example.com:443?type=tcp#{quote(name)}"
+                      for i, (name, _) in enumerate(REMARKS))
+    client.post("/admin/servers/add", data={"csrf_token": headers["X-CSRF-Token"], "links": links, "is_public": "1"})
+    servers = {s.name: s for s in Server.select()}
+    assert sorted(servers) == sorted(name for name, _ in REMARKS)
+    plain = servers["Plain name"]
+    assert client.post(f"/admin/servers/{plain.id}/edit", data={
+        "csrf_token": headers["X-CSRF-Token"], "name": "Plain name", "country": "nl", "tags": "",
+        "is_active": "1", "is_public": "1", "raw_link": plain.raw_link}, follow_redirects=False).status_code == 303
+    servers = {s.name: s for s in Server.select()}
+    assert {name: s.country for name, s in servers.items()} == dict(REMARKS)
+
+    pages = {"public": client.get("/").text, "partial": client.get("/partials/live").text,
+             "admin servers": client.get("/admin/servers").text, "dashboard": client.get("/admin/").text,
+             "incidents": client.get("/admin/incidents").text}
+    for name, server in servers.items():
+        pages[f"detail {name}"] = client.get(f"/admin/servers/{server.id}").text
+        pages[f"edit {name}"] = client.get(f"/admin/servers/{server.id}/edit").text
+    for label, html in pages.items():
+        assert not _flag_letters(_without_names(html)), f"extra flag on {label}"
+    for name in servers:
+        assert f"<bdi>{name}</bdi>" in pages["public"] and f"<bdi>{name}</bdi>" in pages["admin servers"]
+    assert not _flag_letters(_row(pages["public"], servers["Plain name"].id))
+
+    status = client.get("/api/status").json()
+    assert sorted(s["name"] for s in status["servers"]) == sorted(servers)
+    for card in status["servers"]:
+        assert "flag" not in card and card["country"] == servers[card["name"]].country
+        history = client.get(f"/api/servers/{card['id']}/history").json()["server"]
+        assert history["name"] == card["name"] and "flag" not in history
+
+    for name in servers:
+        for text in (messages.server_down(name, now_ts(), "timeout", 99.0),
+                     messages.server_up(name, now_ts() - 60, now_ts(), 60)):
+            assert f"{messages.FSI}{name}{messages.PDI}" in text
+            assert not _flag_letters(text.replace(name, ""))

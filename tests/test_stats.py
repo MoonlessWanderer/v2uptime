@@ -155,3 +155,29 @@ def test_history_payload(database):
     assert history["incidents"][0]["ended_at"].endswith("Z")
     assert history["points"][0]["t"].endswith("Z")
     assert history["range_label"] == "24h"
+
+
+def test_public_ping_is_the_10_minute_median(database):
+    live = LiveRegistry()
+    now = now_ts()
+    for ts, latency in ((now - 1200, 900), (now - 300, 100), (now - 200, 300), (now - 100, 120)):
+        live.add(1, LivePoint(ts, "ok", latency))
+    stats = StatsService(live, lambda _id: False)
+    metrics = stats.live_metrics(1, now)
+    assert metrics.ping_ms == 120 and metrics.latency_ms == 120  # median of 100/300/120; 900 is too old
+    quiet = LiveRegistry()
+    quiet.add(2, LivePoint(now - 900, "ok", 250))  # nothing in the last 10 minutes: keep the last value
+    assert StatsService(quiet, lambda _id: False).live_metrics(2, now).ping_ms == 250
+
+
+def test_connect_ms_column_is_added_to_old_databases(tmp_path):
+    from app.db import init_db
+
+    path = tmp_path / "old.db"
+    database = init_db(path)
+    database.execute_sql("ALTER TABLE checks DROP COLUMN connect_ms")
+    assert "connect_ms" not in {c.name for c in database.get_columns("checks")}
+    database.close()
+    database = init_db(path)
+    assert "connect_ms" in {c.name for c in database.get_columns("checks")}
+    database.close()

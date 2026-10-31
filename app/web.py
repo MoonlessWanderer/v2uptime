@@ -12,7 +12,6 @@ from markupsafe import Markup, escape
 
 from app import __version__
 from app.services.checker import error_label
-from app.services.parser import flag_emoji
 from app.services.settings import settings
 from app.services.status import STATUS_LABELS
 from app.timeutil import fmt_ago, fmt_datetime, fmt_duration, fmt_ms, fmt_percent, fmt_time, iso_utc, tz_label
@@ -77,7 +76,7 @@ def time_tag(value: Any, kind: str = "time") -> Markup | str:
 
 templates.env.globals.update(
     admin_url=admin_url, static_url=static_url, settings=settings, version=__version__,
-    flag_emoji=flag_emoji, tz_label=tz_label,
+    tz_label=tz_label,
 )
 templates.env.filters.update(
     time_tag=time_tag, bidi=bidi, duration=fmt_duration, percent=fmt_percent, ago=fmt_ago, ms=fmt_ms,

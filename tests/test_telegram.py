@@ -261,3 +261,20 @@ def test_daily_report_schedule(tg, monkeypatch):
     assert run(notifier.maybe_send_reports(t8 + 3600)) == ["daily", "weekly"]
     assert run(notifier.maybe_send_reports(t8 + 7200)) == []  # once per day
     assert sent == [("daily", "report 1"), ("weekly", "report 7")]
+
+
+def _utc(*args):
+    return int(datetime(*args, tzinfo=ZoneInfo("UTC")).timestamp())
+
+
+def test_recovery_range_same_day_shows_clock_only(database):
+    start = _utc(2026, 10, 31, 14, 58)  # 18:28 in Asia/Tehran
+    assert "Downtime: 12m (18:28 → 18:40)" in messages.server_up("S", start, start + 720, 720)
+    assert "Downtime: <b>12m</b> (18:28 → 18:40)" in messages.network_up(start, start + 720)
+
+
+def test_recovery_range_across_days_shows_dates(database):
+    start, end = _utc(2026, 10, 30, 14, 58), _utc(2026, 10, 31, 17, 10)  # 18:28 -> next day 20:40 local
+    text = messages.server_up("S", start, end, end - start)
+    assert "Downtime: 1d 2h (2026-10-30 18:28 → 2026-10-31 20:40)" in text
+    assert "(2026-10-30 18:28 → 2026-10-31 20:40)" in messages.network_up(start, end)

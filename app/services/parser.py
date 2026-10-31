@@ -182,19 +182,28 @@ def _csv(value: str) -> list[str]:
     return [item.strip() for item in (value or "").split(",") if item.strip()]
 
 
+def _is_regional_indicator(char: str) -> bool:
+    return 0x1F1E6 <= ord(char) <= 0x1F1FF
+
+
 def country_from_remark(remark: str) -> str:
-    """Extract an ISO country code from a flag emoji in the remark, if any."""
-    chars = [c for c in remark if 0x1F1E6 <= ord(c) <= 0x1F1FF]
-    if len(chars) >= 2:
-        return "".join(chr(ord(c) - 0x1F1E6 + ord("A")) for c in chars[:2])
-    return ""
+    """ISO code of the last complete flag in the remark, or ``""``.
 
-
-def flag_emoji(country: str) -> str:
-    country = (country or "").upper()
-    if len(country) != 2 or not country.isalpha():
-        return ""
-    return "".join(chr(0x1F1E6 + ord(c) - ord("A")) for c in country)
+    Regional indicator letters are read in consecutive pairs, the way they
+    are drawn; a lone letter or an unfinished pair is ignored. In a tunnel
+    name such as ``🇮🇷➡️🇩🇪`` the last flag is the exit country (``DE``).
+    This only fills ``Server.country`` (search and API); names are always
+    shown exactly as written, and no flag is ever added next to them.
+    """
+    code, index = "", 0
+    while index < len(remark):
+        pair = remark[index:index + 2]
+        if len(pair) == 2 and all(_is_regional_indicator(c) for c in pair):
+            code = "".join(chr(ord(c) - 0x1F1E6 + ord("A")) for c in pair)
+            index += 2
+        else:
+            index += 1
+    return code
 
 
 # ------------------------------------------------------ stream settings

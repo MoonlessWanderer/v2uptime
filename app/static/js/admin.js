@@ -66,7 +66,9 @@
       post(base + "/servers/" + id + "/test")
         .then(function (r) {
           out.className = "test-result pill " + (r.ok ? "pill-ok" : "pill-bad");
-          out.textContent = r.ok ? "OK · " + r.latency_ms + " ms" : "Failed · " + r.error;
+          out.textContent = r.ok
+            ? "OK · " + r.latency_ms + " ms" + (r.connect_ms !== null && r.connect_ms !== undefined ? " (connect " + r.connect_ms + " ms)" : "")
+            : "Failed · " + r.error;
           if (!r.ok && r.detail) out.title = r.detail;
         })
         .catch(function () { out.textContent = "Error"; })

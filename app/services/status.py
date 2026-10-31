@@ -26,6 +26,7 @@ UNKNOWN = "unknown"
 
 STATUS_LABELS = {ONLINE: "Online", DEGRADED: "Degraded", OFFLINE: "Down", UNKNOWN: "Unknown"}
 STATUS_EMOJI = {ONLINE: "🟢", DEGRADED: "🟡", OFFLINE: "🔴", UNKNOWN: "⚪"}
+NEW_LABEL = "New"
 
 MIN_VALID_FOR_STATUS = 2
 RECENT_WINDOW = 3600
@@ -57,6 +58,11 @@ def classify_status(points: Iterable[LivePoint], in_incident: bool, now: int, *,
     if (last.latency_ms or 0) > degraded_latency_ms or fail_ratio * 100 > degraded_fail_percent:
         return DEGRADED
     return ONLINE
+
+
+def display_label(status: str, collecting: bool) -> str:
+    """Label for the public page and API: a server still collecting data is "New"."""
+    return NEW_LABEL if collecting else STATUS_LABELS[status]
 
 
 class LiveRegistry:
@@ -115,6 +121,6 @@ def seed_rows(since: int) -> list[tuple[int, int, str, int | None, str | None]]:
 
 
 __all__ = [
-    "ONLINE", "DEGRADED", "OFFLINE", "UNKNOWN", "STATUS_LABELS", "STATUS_EMOJI", "LivePoint",
-    "LiveRegistry", "classify_status", "seed_rows", "STATUS_OK", "STATUS_FAIL",
+    "ONLINE", "DEGRADED", "OFFLINE", "UNKNOWN", "STATUS_LABELS", "STATUS_EMOJI", "NEW_LABEL", "LivePoint",
+    "LiveRegistry", "classify_status", "display_label", "seed_rows", "STATUS_OK", "STATUS_FAIL",
 ]

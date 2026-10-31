@@ -5,6 +5,7 @@
     python3 main.py reset-password -u admin
     python3 main.py set-setting admin_path /admin-x7k2
     python3 main.py backup-db -o /root/uptime-backup.db
+    python3 main.py probe 3 --count 5         # cold vs warm timing through server 3
 """
 
 from __future__ import annotations
@@ -132,6 +133,60 @@ def cmd_backup_db(args: argparse.Namespace) -> None:
     print(f"Backup written to {args.out}")
 
 
+PHASES = (("connect_tcp", "tcp"), ("setup_socks5_connection", "socks"), ("start_tls", "tls"),
+          ("receive_response_headers", "ttfb"))
+
+
+def _phase_text(phases: dict[str, int]) -> str:
+    parts = [f"{label} {phases[key]}" for key, label in PHASES if key in phases]
+    return f" ({', '.join(parts)})" if parts else ""
+
+
+def cmd_probe(args: argparse.Namespace) -> None:
+    """Show where a server's ping comes from: cold vs warm request, with connection phases."""
+    import asyncio
+    import statistics
+
+    from app.models import Server
+    from app.services.checker import error_label, probe, socks_url
+    from app.services.settings import settings
+    from app.services.xray_manager import port_is_free
+
+    _open_db()
+    server = Server.get_or_none(Server.id == args.server_id)
+    if server is None:
+        raise SystemExit(f"No server with id {args.server_id}.")
+    if not server.socks_port or port_is_free(server.socks_port):
+        raise SystemExit("This server is not loaded in Xray. Is the panel running and the server active?")
+    url, timeout = settings.get("test_url"), float(settings.get("check_timeout"))
+    proxy = socks_url(server.socks_port)
+    print(f"Server {server.id}: {server.name} ({server.protocol}/{server.transport}/{server.security})")
+    print(f"Test URL: {url} · timeout {timeout:g}s each · via {proxy}")
+    print("Phases in ms: tcp = to local Xray, socks = SOCKS handshake, tls = TLS to the test host through "
+          "the tunnel, ttfb = request sent to response headers.")
+    colds, warms = [], []
+    for attempt in range(1, args.count + 1):
+        timers: list = []
+        result = asyncio.run(probe(url, proxy, timeout, warm=True, timers=timers))
+        if not result.ok:
+            print(f"#{attempt}  failed: {error_label(result.error_type)} · {result.detail or ''}")
+            continue
+        colds.append(result.connect_ms)
+        line = f"#{attempt}  cold {result.connect_ms} ms{_phase_text(timers[0].phases)}"
+        if result.warm:
+            warms.append(result.latency_ms)
+            line += f"   warm {result.latency_ms} ms{_phase_text(timers[1].phases)}"
+        else:
+            line += "   warm request failed (the check would use the cold time)"
+        print(line + f"   HTTP {result.status_code}")
+    if colds:
+        summary = f"Median: cold {statistics.median(colds):.0f} ms"
+        if warms:
+            summary += f", warm {statistics.median(warms):.0f} ms"
+        print(summary)
+        print("The panel shows the warm time as Ping and the cold time as Connect time.")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="v2uptime", description=f"v2uptime {__version__}")
     sub = parser.add_subparsers(dest="command")
@@ -149,6 +204,10 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("get-setting", help="print a runtime setting")
     p.add_argument("key")
     p.set_defaults(func=cmd_get_setting)
+    p = sub.add_parser("probe", help="time cold and warm requests through one server (panel must be running)")
+    p.add_argument("server_id", type=int)
+    p.add_argument("--count", type=int, default=5)
+    p.set_defaults(func=cmd_probe)
     p = sub.add_parser("backup-db", help="write a consistent copy of the database")
     p.add_argument("-o", "--out", required=True)
     p.set_defaults(func=cmd_backup_db)

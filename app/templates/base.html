@@ -9,6 +9,7 @@
   <link rel="icon" href="{{ static_url('img/favicon.svg') }}" type="image/svg+xml">
   <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
   <script src="{{ static_url('js/theme.js') }}"></script>
+  <script src="{{ static_url('js/flags.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}" data-tz="{{ settings.tz }}" data-tz-label="{{ tz_label(settings.tz) }}">

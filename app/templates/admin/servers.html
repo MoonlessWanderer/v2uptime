@@ -27,7 +27,7 @@
       <tr data-id="{{ s.id }}" draggable="true">
         <td class="drag-handle" title="Drag to reorder"><svg class="ic"><use href="#i-grip"/></svg></td>
         <td>
-          <a href="{{ admin_url('/servers/' ~ s.id) }}"><strong>{{ flag_emoji(s.country) }} <bdi>{{ s.name }}</bdi></strong></a>
+          <a href="{{ admin_url('/servers/' ~ s.id) }}"><strong><bdi>{{ s.name }}</bdi></strong></a>
           {% if s.subscription %}<br><small class="muted">Sub: <bdi>{{ s.subscription.name or s.subscription.id }}</bdi></small>{% endif %}
           {% if s.xray_error %}<br><small class="pill pill-bad" title="{{ s.xray_error }}">Rejected by Xray</small>{% endif %}
           {% if s.tags %}<br><small class="muted" dir="auto"><bdi>{{ s.tags }}</bdi></small>{% endif %}

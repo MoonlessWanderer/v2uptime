@@ -93,6 +93,9 @@ Options:
   --apt-mirror URL          temporary APT mirror base (e.g. https://mirror.arvancloud.ir)
   --xray-zip FILE           install Xray from a local Xray-linux-*.zip
   -h, --help                show this help
+
+Commands:
+  probe ID [--count N]      time cold and warm requests through server ID (see README, Troubleshooting)
 EOF
 }
 
@@ -923,6 +926,13 @@ EOF
 }
 
 main() {
+  if [[ "${1:-}" == "probe" ]]; then  # sudo v2uptime probe ID [--count N]
+    shift
+    require_root
+    is_installed || die "v2uptime is not installed."
+    app_cmd probe "$@" || exit $?
+    exit 0
+  fi
   parse_args "$@"
   require_root
   TMP_ROOT="$(mktemp -d /tmp/v2uptime.XXXXXX)"

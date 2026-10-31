@@ -1,4 +1,8 @@
+import json
+import shutil
+import subprocess
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -32,17 +36,57 @@ def test_utc_converts_to_tehran():
     assert fmt_datetime(None, TEHRAN) == "—"
 
 
-def test_fmt_duration_boundaries():
-    assert fmt_duration(45) == "45s"
+DURATIONS = [
+    (0, "0s"), (45, "45s"), (60, "1m"), (90, "1m 30s"), (3600, "1h"), (3601, "1h"), (3660, "1h 1m"),
+    (8130, "2h 15m"), (86400, "1d"), (86401, "1d"), (90000, "1d 1h"), (273600, "3d 4h"),
+]
+TIME_JS = Path(__file__).resolve().parents[1] / "app" / "static" / "js" / "time.js"
+NODE_RUNNER = """
+const fs = require("fs"), vm = require("vm");
+const sandbox = {window: {}, setInterval() {},
+                 document: {readyState: "complete", body: null, querySelectorAll: () => [], addEventListener() {}}};
+vm.createContext(sandbox);
+vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), sandbox);
+const input = JSON.parse(process.argv[2]);
+process.stdout.write(JSON.stringify(input.map((s) => sandbox.window.UptimeTime.formatDuration(s))));
+"""
+
+
+@pytest.mark.parametrize("seconds, expected", DURATIONS)
+def test_fmt_duration_table(seconds, expected):
+    assert fmt_duration(seconds) == expected
+
+
+def test_fmt_duration_edges():
     assert fmt_duration(59) == "59s"
-    assert fmt_duration(60) == "1m"
-    assert fmt_duration(12 * 60) == "12m"
     assert fmt_duration(3599) == "59m 59s"
-    assert fmt_duration(3600) == "1h"
-    assert fmt_duration(2 * 3600 + 15 * 60) == "2h 15m"
-    assert fmt_duration(86400) == "1d"
-    assert fmt_duration(3 * 86400 + 4 * 3600) == "3d 4h"
+    assert fmt_duration(-5) == "0s"
     assert fmt_duration(None) == "—"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
+def test_js_format_duration_matches_python():
+    cases = DURATIONS + [(59, "59s"), (3599, "59m 59s"), (-5, "0s")]
+    out = subprocess.run(["node", "-e", NODE_RUNNER, str(TIME_JS), json.dumps([value for value, _ in cases])],
+                         capture_output=True, text=True, encoding="utf-8", check=True, timeout=30)
+    assert json.loads(out.stdout) == [expected for _, expected in cases]
+
+
+def _utc(*args):
+    return int(datetime(*args, tzinfo=timezone.utc).timestamp())
+
+
+def test_fmt_range_ending_at_midnight_keeps_one_date():
+    # 2026-10-30 23:30 -> 2026-10-31 00:00 in Asia/Tehran (UTC+03:30)
+    assert fmt_range(_utc(2026, 10, 30, 20, 0), _utc(2026, 10, 30, 20, 30), TEHRAN) == "2026-10-30 23:30–00:00"
+    # 4-hour bucket of the 7d bar: 20:00 -> 00:00
+    assert fmt_range(_utc(2026, 10, 30, 16, 30), _utc(2026, 10, 30, 20, 30), TEHRAN) == "2026-10-30 20:00–00:00"
+
+
+def test_fmt_range_into_next_day_shows_end_date():
+    start = _utc(2026, 10, 30, 20, 0)  # 23:30 local
+    assert fmt_range(start, _utc(2026, 10, 30, 21, 0), TEHRAN) == "2026-10-30 23:30–2026-10-31 00:30"
+    assert fmt_range(start, _utc(2026, 10, 31, 20, 30), TEHRAN) == "2026-10-30 23:30–2026-11-01 00:00"
 
 
 def test_fmt_ago():
