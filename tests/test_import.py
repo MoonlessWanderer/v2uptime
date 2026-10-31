@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import sqlite3
 import time
 
 import httpx
@@ -47,6 +48,87 @@ def _patch_fetch(monkeypatch, handler, resolve=None):
 
     monkeypatch.setattr(importer, "fetch_text", wrapped)
     monkeypatch.setattr(importer, "_resolve", lookup)
+
+
+def _graft_subscription_column(database, *, drop_parent):
+    """Rebuild ``servers`` the way Peewee created it, with a real foreign key."""
+    database.execute_sql("PRAGMA foreign_keys = OFF")
+    try:
+        database.execute_sql(
+            'CREATE TABLE "subscriptions" ("id" INTEGER NOT NULL PRIMARY KEY, '
+            '"name" VARCHAR(200) NOT NULL, "url" TEXT NOT NULL)')
+        database.execute_sql(
+            "INSERT INTO subscriptions (id, name, url) VALUES (1, 'Old', 'https://sub.example/secret')")
+        info = list(database.execute_sql("PRAGMA table_info(servers)"))
+        pieces, names = [], []
+        for _cid, name, typ, notnull, default, pk in info:
+            piece = f'"{name}" {typ}'
+            if notnull:
+                piece += " NOT NULL"
+            if default is not None:
+                piece += f" DEFAULT {default}"
+            if pk:
+                piece += " PRIMARY KEY"
+            pieces.append(piece)
+            names.append(name)
+        pieces.append('"subscription_id" INTEGER')
+        pieces.append(
+            'FOREIGN KEY ("subscription_id") REFERENCES "subscriptions" ("id") ON DELETE SET NULL')
+        quoted = ", ".join(f'"{name}"' for name in names)
+        indexes = [row[0] for row in database.execute_sql(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'servers' AND sql IS NOT NULL")]
+        database.execute_sql(f'CREATE TABLE "servers__legacy" ({", ".join(pieces)})')
+        database.execute_sql(
+            f'INSERT INTO "servers__legacy" ({quoted}, "subscription_id") SELECT {quoted}, 1 FROM "servers"')
+        database.execute_sql('DROP TABLE "servers"')
+        database.execute_sql('ALTER TABLE "servers__legacy" RENAME TO "servers"')
+        for statement in indexes:
+            database.execute_sql(statement)
+        database.execute_sql('CREATE INDEX "server_subscription_id" ON "servers" ("subscription_id")')
+        if drop_parent:
+            database.execute_sql('DROP TABLE "subscriptions"')
+    finally:
+        database.execute_sql("PRAGMA foreign_keys = ON")
+
+
+@pytest.mark.parametrize("drop_parent", [False, True])
+def test_migration_removes_subscription_foreign_key(tmp_path, drop_parent):
+    path = tmp_path / "legacy.db"
+    database = init_db(path)
+    settings._cache.clear()
+    settings._loaded = False
+    server = make_server("Kept", port=22021)
+    add_checks(server, 1_700_000_000, "oof")
+    check_id = Check.select().get().id
+    _graft_subscription_column(database, drop_parent=drop_parent)
+    database.execute_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+    database.close()
+
+    if drop_parent:
+        raw = sqlite3.connect(path)
+        raw.execute("PRAGMA foreign_keys = ON")
+        with pytest.raises(sqlite3.OperationalError, match="no such table"):
+            raw.execute("UPDATE servers SET subscription_id = NULL")
+        raw.close()
+
+    database = init_db(path)
+    try:
+        kept = Server.get()
+        assert kept.name == "Kept"
+        assert kept.socks_port == 22021
+        assert Check.get_by_id(check_id).server_id == kept.id
+        Check.create(server=kept, checked_at=1_700_000_060, status="ok", latency_ms=10)
+        assert "subscriptions" not in database.get_tables()
+        assert "subscription_id" not in {column.name for column in database.get_columns("servers")}
+        indexes = {row[1] for row in database.execute_sql("PRAGMA index_list('servers')")}
+        assert "server_socks_port" in indexes
+        assert "server_subscription_id" not in indexes
+        assert list(database.execute_sql("PRAGMA foreign_key_check")) == []
+        assert database.execute_sql("PRAGMA foreign_keys").fetchone()[0] == 1
+        init_db(path)
+        assert Server.select().count() == 1
+    finally:
+        database.close()
 
 
 def test_migration_keeps_servers_and_history(tmp_path):

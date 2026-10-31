@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- An update no longer crash-loops when `servers.subscription_id` still references a `subscriptions` table that is already gone. The column is removed by rebuilding `servers`, and the servers and their history stay.
 - The public page and the admin panel use Vazirmatn at two weights (400 and 600) and one size scale. Sort tabs no longer recolor ping or uptime.
 - Persian numbers on the public page keep their order. An open card shows the average ping as `260 ms`, and the footer timezone, parentheses included, stays one left-to-right run. Resolving a subscription link no longer blocks the check loop.
 - The public status page can be shown in English or Persian. The default is a setting; a visitor's choice is remembered for a year. Dates and digits stay as they were.
