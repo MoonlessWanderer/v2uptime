@@ -33,6 +33,7 @@ def panel(tmp_path):
     make_server("Parked", port=24131, active=False)
     reality = make_server("Reality node", port=24132)
     reality.security = "reality"
+    reality.xray_error = "rejected"
     reality.save()
     make_server(LONG, port=24133)
     make_server("Plain", port=24134)
@@ -124,11 +125,37 @@ def test_server_table_fits_and_reorders_from_the_keyboard(panel):
         assert parked.locator(".col-status").inner_text().strip().startswith("Inactive")
         assert page.locator("td.col-name a").filter(has_text=LONG).get_attribute("title") == LONG
 
+        assert page.locator('button[aria-label="Try again"]').count() == 1
         for width in (1280, 1440):
             page.set_viewport_size({"width": width, "height": 900})
             page.locator("#server-table").evaluate("el => el.scrollIntoView({block: 'start'})")
             fit = page.evaluate(FIT)
             assert fit["scroll"] <= fit["client"] and fit["outside"] == [], fit
+        page.evaluate("""() => {
+            document.querySelectorAll(".test-mark").forEach((el) => {
+                el.hidden = false;
+                el.className = "test-mark is-ok";
+                el.textContent = "ms 9999";
+            });
+        }""")
+        for width in (1280, 1440):
+            page.set_viewport_size({"width": width, "height": 900})
+            page.locator("#server-table").evaluate("el => el.scrollIntoView({block: 'start'})")
+            fit = page.evaluate(FIT)
+            assert fit["scroll"] <= fit["client"] and fit["outside"] == [], fit
+        clipped = page.evaluate("""() => {
+            const el = document.querySelector("#server-table .test-mark");
+            const cs = getComputedStyle(el);
+            const sample = document.createElement("span");
+            sample.style.cssText = "position:absolute;left:-9999px;font-size:" + cs.fontSize
+                + ";font-family:" + cs.fontFamily + ";font-variant-numeric:tabular-nums;font-weight:" + cs.fontWeight;
+            sample.textContent = "ms 9999";
+            document.body.appendChild(sample);
+            const text = sample.getBoundingClientRect().width;
+            sample.remove();
+            return text + 12 > el.clientWidth + 0.5;
+        }""")
+        assert not clipped
 
         page.set_viewport_size({"width": 800, "height": 900})
         page.locator("#server-table").evaluate("el => el.scrollIntoView({block: 'start'})")

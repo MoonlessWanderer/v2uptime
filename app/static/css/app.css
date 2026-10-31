@@ -382,19 +382,21 @@ tr.drop-target td { box-shadow: inset 0 2px 0 var(--accent); }
 @media (min-width: 800px) { .form-grid { grid-template-columns: 1fr 1fr; } .form-grid .full { grid-column: 1 / -1; } }
 @media (min-width: 800px) { .form-grid.single { grid-template-columns: 1fr; } }
 #server-table { --col-check: 36px; --col-handle: 28px; width: max-content; min-width: 100%; }
+#server-table th, #server-table td { padding-inline: 6px; }
 #server-table td { white-space: nowrap; }
 #server-table .col-check { width: var(--col-check); min-width: var(--col-check); max-width: var(--col-check); }
 #server-table .col-handle { width: var(--col-handle); min-width: var(--col-handle); max-width: var(--col-handle); padding-inline: 0; text-align: center; }
-#server-table .col-name { width: 240px; max-width: 240px; }
+#server-table .col-name { width: 208px; max-width: 208px; }
 #server-table td.col-name a {
-  display: block; width: 240px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  display: block; width: 208px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+#server-table .btn.btn-icon { width: 28px; min-width: 28px; height: 28px; }
 #server-table td.col-status { white-space: normal; }
 #server-table .row-actions { display: inline-flex; align-items: center; gap: 4px; }
 #server-table .row-actions form { display: inline-flex; margin: 0; }
 #server-table .test-mark {
   display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;
-  width: 56px; min-width: 56px; max-width: 56px; overflow: hidden;
+  width: 60px; min-width: 60px; max-width: 60px; overflow: hidden;
   font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
 }
 #server-table .test-mark::before {
