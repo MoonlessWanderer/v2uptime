@@ -48,7 +48,8 @@ const sandbox = {window: {}, setInterval() {},
 vm.createContext(sandbox);
 vm.runInContext(fs.readFileSync(process.argv[1], "utf8"), sandbox);
 const input = JSON.parse(process.argv[2]);
-process.stdout.write(JSON.stringify(input.map((s) => sandbox.window.UptimeTime.formatDuration(s))));
+const coarse = process.argv[3] === "coarse";
+process.stdout.write(JSON.stringify(input.map((s) => sandbox.window.UptimeTime.formatDuration(s, coarse))));
 """
 
 
@@ -64,12 +65,35 @@ def test_fmt_duration_edges():
     assert fmt_duration(None) == "—"
 
 
+COARSE = [
+    (45, "45s"), (59, "59s"), (60, "1m"), (90, "1m"), (47 * 60 + 2, "47m"),
+    (3599, "59m"), (3600, "1h"), (3630, "1h"), (3660, "1h 1m"), (3690, "1h 1m"),
+]
+
+
+@pytest.mark.parametrize("seconds, expected", COARSE)
+def test_fmt_duration_coarse_drops_seconds_after_a_minute(seconds, expected):
+    assert fmt_duration(seconds, coarse=True) == expected
+    assert fmt_duration(None, coarse=True) == "—"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
+def _js_durations(cases, coarse=False):
+    args = ["node", "-e", NODE_RUNNER, str(TIME_JS), json.dumps([value for value, _ in cases])]
+    if coarse:
+        args.append("coarse")
+    out = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", check=True, timeout=30)
+    assert json.loads(out.stdout) == [expected for _, expected in cases]
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
 def test_js_format_duration_matches_python():
-    cases = DURATIONS + [(59, "59s"), (3599, "59m 59s"), (-5, "0s")]
-    out = subprocess.run(["node", "-e", NODE_RUNNER, str(TIME_JS), json.dumps([value for value, _ in cases])],
-                         capture_output=True, text=True, encoding="utf-8", check=True, timeout=30)
-    assert json.loads(out.stdout) == [expected for _, expected in cases]
+    _js_durations(DURATIONS + [(59, "59s"), (3599, "59m 59s"), (-5, "0s")])
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
+def test_js_format_duration_coarse_matches_python():
+    _js_durations(COARSE, coarse=True)
 
 
 def _utc(*args):

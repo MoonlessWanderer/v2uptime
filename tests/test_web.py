@@ -397,7 +397,7 @@ def test_closed_cards_show_name_ping_bar_and_status(client):
         ping = re.search(r'<span class="card-ping[^"]*">([^<]*)</span>', card).group(1)
         assert ping == (f"{cards[server.id]['ping_ms']} ms" if cards[server.id]["ping_ms"] is not None else "—")
     up = {key: fmt_percent(cards[s.id]["uptime_24h"]) for key, s in servers.items()}
-    down_for = fmt_duration(cards[servers["down"].id]["last_incident"]["duration_seconds"])
+    down_for = fmt_duration(cards[servers["down"].id]["last_incident"]["duration_seconds"], coarse=True)
     assert _card_state(_row(page, servers["online"].id)) == "Online · 100% uptime"
     assert _card_state(_row(page, servers["degraded"].id)) == f"Degraded · {up['degraded']} uptime"
     assert _card_state(_row(page, servers["down"].id)) == f"Down for {down_for} · {up['down']} uptime"

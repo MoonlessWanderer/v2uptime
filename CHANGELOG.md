@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A mouse click on the 24h bar of a closed card opens the card. A touch on that bar still only moves the tooltip. The bar and chart inside an open card do not close it.
+- "Down for" omits seconds once the outage is a minute or longer (`47m`, not `47m 2s`). Other durations, including "lasted", are unchanged. "Down since" already uses minute-level relative time.
+- An update writes the database backup into a directory owned by the service user. If that backup fails, the update log says so and the stopped database is copied with its WAL files. A failed update restores that copy before the previous version starts.
+
 ## 1.3.0
 
 ### Public page: one card per server

@@ -783,6 +783,55 @@ do_install() {
 }
 
 # ------------------------------------------------------------------ update
+# Consistent copy while the service is still running. The directory is owned by
+# the service user because backup-db runs as that user. DB_BACKUP_OK=0 means
+# the caller must copy the files after the service has stopped.
+backup_database() {
+  local dest="$1"
+  install -d -o "$APP_USER" -m 700 "$dest"
+  rm -f "$dest/uptime.db" "$dest/uptime.db-wal" "$dest/uptime.db-shm"
+  DB_BACKUP_OK=0
+  if app_cmd backup-db -o "$dest/uptime.db"; then
+    DB_BACKUP_OK=1
+    return 0
+  fi
+  rm -f "$dest/uptime.db"
+  warn "Database backup failed. A consistent copy could not be written to $dest."
+  warn "The database files will be copied after the service stops, including uptime.db-wal and uptime.db-shm."
+}
+
+# Raw copy of the stopped database. Call only after systemctl stop, and only
+# when backup_database did not succeed. Includes the WAL so the copy is complete.
+snapshot_database_files() {
+  local dest="$1" data="$INSTALL_DIR/data" name
+  [[ "${DB_BACKUP_OK:-0}" == 1 ]] && return 0
+  warn "Copying the stopped database files (uptime.db, uptime.db-wal, uptime.db-shm)."
+  rm -f "$dest/uptime.db" "$dest/uptime.db-wal" "$dest/uptime.db-shm"
+  if [[ ! -f "$data/uptime.db" ]]; then
+    warn "No database file was found at $data/uptime.db. Rollback cannot restore it."
+    return 1
+  fi
+  for name in uptime.db uptime.db-wal uptime.db-shm; do
+    if [[ -f "$data/$name" ]]; then
+      cp -a "$data/$name" "$dest/$name" || warn "Could not copy $name."
+    fi
+  done
+}
+
+# Put the pre-update database back before the old version is started.
+restore_database_backup() {
+  local src="$1" data="$INSTALL_DIR/data" name
+  if [[ ! -f "$src/uptime.db" ]]; then
+    warn "No database backup was found. The database was left as the new version wrote it."
+    return 1
+  fi
+  rm -f "$data/uptime.db" "$data/uptime.db-wal" "$data/uptime.db-shm"
+  for name in uptime.db uptime.db-wal uptime.db-shm; do
+    [[ -f "$src/$name" ]] && cp -a "$src/$name" "$data/$name"
+  done
+  info "Restored the database from the pre-update backup."
+}
+
 do_update() {
   is_installed || die "Not installed."
   title "Update v2uptime"
@@ -801,9 +850,10 @@ do_update() {
   info "Backing up the current version…"
   rm -rf "$rollback" && mkdir -p "$rollback/files"
   copy_source "$INSTALL_DIR" "$rollback/files"
-  app_cmd backup-db -o "$rollback/uptime.db" >/dev/null 2>&1 || cp -a "$INSTALL_DIR/data/uptime.db" "$rollback/" 2>/dev/null || true
+  backup_database "$rollback/db"
 
   systemctl stop "$SERVICE"
+  snapshot_database_files "$rollback/db" || true
   copy_source "$src" "$INSTALL_DIR"
   mv "$INSTALL_DIR/venv" "$rollback/venv"
   mv "$stage/venv" "$INSTALL_DIR/venv"
@@ -819,6 +869,7 @@ do_update() {
   warn "The new version did not start — rolling back."
   systemctl stop "$SERVICE" || true
   copy_source "$rollback/files" "$INSTALL_DIR"
+  restore_database_backup "$rollback/db" || true
   rm -rf "$INSTALL_DIR/venv" && mv "$rollback/venv" "$INSTALL_DIR/venv"
   fix_permissions
   systemctl start "$SERVICE"

@@ -18,7 +18,7 @@
       <span class="card-line card-sub">
         <span class="card-state"><span class="status-dot{% if not s.collecting %} {{ s.status }}{% endif %}"></span>
           {%- if s.collecting %}<strong>{{ s.status_label }}</strong> · Collecting data
-          {%- elif s.status == 'offline' %}<strong>{{ s.status_label }}{% if incident and not incident.ended_at %} for {{ incident.duration_seconds|duration }}{% endif %}</strong> · <span class="card-up">{{ s.uptime_24h|percent }}</span> uptime
+          {%- elif s.status == 'offline' %}<strong>{{ s.status_label }}{% if incident and not incident.ended_at %} for {{ incident.duration_seconds|duration(true) }}{% endif %}</strong> · <span class="card-up">{{ s.uptime_24h|percent }}</span> uptime
           {%- elif s.uptime_24h is none %}<strong>{{ s.status_label }}</strong> · No recent checks
           {%- else %}<strong>{{ s.status_label }}</strong> · <span class="card-up">{{ s.uptime_24h|percent }}</span> uptime{% endif -%}
         </span>

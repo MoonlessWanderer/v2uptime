@@ -69,9 +69,10 @@
     return part.month + " " + pad(part.day);
   }
 
-  /* Largest non-zero unit, plus the next smaller one when it is not zero (same as fmt_duration). */
+  /* Largest non-zero unit, plus the next smaller one when it is not zero (same as fmt_duration).
+     coarse drops seconds once the span is at least a minute ("47m 2s" -> "47m"). */
   var UNITS = [["d", 86400], ["h", 3600], ["m", 60], ["s", 1]];
-  function formatDuration(seconds) {
+  function formatDuration(seconds, coarse) {
     if (seconds === null || seconds === undefined || seconds === "") return EMPTY;
     var rem = Math.floor(Number(seconds));
     if (!isFinite(rem)) return EMPTY;
@@ -84,7 +85,9 @@
     for (var i = 0; i < counts.length; i++) {
       if (!counts[i]) continue;
       var text = counts[i] + UNITS[i][0];
-      if (i + 1 < counts.length && counts[i + 1]) text += " " + counts[i + 1] + UNITS[i + 1][0];
+      if (i + 1 < counts.length && counts[i + 1] && !(coarse && UNITS[i + 1][0] === "s")) {
+        text += " " + counts[i + 1] + UNITS[i + 1][0];
+      }
       return text;
     }
     return "0s";

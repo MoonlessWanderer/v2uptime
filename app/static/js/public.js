@@ -274,7 +274,9 @@
       point(dragging, e.clientX);
     }
   });
+  var lastPointer = "mouse";
   list.addEventListener("pointerdown", function (e) {
+    lastPointer = e.pointerType || "mouse";
     var el = region(e.target);
     if (el && e.pointerType !== "mouse") { dragging = el; point(el, e.clientX); }
   });
@@ -290,8 +292,13 @@
     var rangeBtn = e.target.closest(".range-seg [data-range]");
     if (rangeBtn) { showRange(rangeBtn.closest(".card"), rangeBtn.getAttribute("data-range")); return; }
     var card = e.target.closest("#servers > li");
-    // The whole card toggles, like its button; the bar and the open section have their own pointer handling.
-    if (!card || e.target.closest(".card-detail") || e.target.closest(".card-bars")) return;
+    // The open section (its bar and chart) keeps its own pointer handling and does not toggle the card.
+    if (!card || e.target.closest(".card-detail")) return;
+    // A mouse click on the closed card's bar opens it. Touch only moves the tooltip.
+    if (e.target.closest(".card-bars")) {
+      if (lastPointer === "mouse" && !card.classList.contains("is-open")) setOpen(card, true);
+      return;
+    }
     setOpen(card, !card.classList.contains("is-open"));
   });
 

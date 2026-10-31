@@ -123,10 +123,11 @@ def fmt_range(start: int | None, end: int | None, tz_name: str) -> str:
     return f"{start_text}–{fmt_datetime(end, tz_name)}"
 
 
-def fmt_duration(seconds: int | float | None) -> str:
+def fmt_duration(seconds: int | float | None, coarse: bool = False) -> str:
     """Largest non-zero unit, plus the next smaller unit when it is not zero.
 
     ``45s``, ``1m 30s``, ``1h`` (3601s), ``1h 1m``, ``1d`` (86401s), ``3d 4h``.
+    ``coarse`` drops seconds once the span is at least a minute (``47m 2s`` → ``47m``).
     Keep in step with ``formatDuration`` in ``static/js/time.js``.
     """
     if seconds is None:
@@ -139,8 +140,9 @@ def fmt_duration(seconds: int | float | None) -> str:
     for index, (count, suffix) in enumerate(values):
         if count:
             text = f"{count}{suffix}"
-            if index + 1 < len(values) and values[index + 1][0]:
-                text += f" {values[index + 1][0]}{values[index + 1][1]}"
+            nxt = index + 1
+            if nxt < len(values) and values[nxt][0] and not (coarse and values[nxt][1] == "s"):
+                text += f" {values[nxt][0]}{values[nxt][1]}"
             return text
     return "0s"
 

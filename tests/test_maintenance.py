@@ -171,7 +171,7 @@ main "$@"
 """
 
 
-def _install_tree(tmp_path: Path) -> Path:
+def _install_tree(tmp_path: Path, tail: str = HARNESS) -> Path:
     base = tmp_path / "opt"
     (base / "app").mkdir(parents=True)
     (base / "data").mkdir()
@@ -181,7 +181,7 @@ def _install_tree(tmp_path: Path) -> Path:
     script = (ROOT / "install.sh").read_text(encoding="utf-8")
     script = script.replace('INSTALL_DIR="/opt/v2uptime"', f'INSTALL_DIR="{base.as_posix()}"', 1)
     assert script.rstrip().endswith('main "$@"')
-    (tmp_path / "install-test.sh").write_text(script.rstrip()[: -len('main "$@"')] + HARNESS, encoding="utf-8",
+    (tmp_path / "install-test.sh").write_text(script.rstrip()[: -len('main "$@"')] + tail, encoding="utf-8",
                                                newline="\n")
     return base
 
@@ -218,6 +218,78 @@ def test_install_control_reports_a_failed_update(tmp_path):
     _run_control(tmp_path, b"update", FAKE_UPDATE_FAIL="1")
     status = Control(base).update_status()
     assert status["state"] == "failed" and "1.1.0 is running" in status["message"]
+
+
+DB_HARNESS = r"""
+install() { mkdir -p "${@: -1}"; printf 'install %s\n' "$*" >> "$INSTALL_DIR/calls"; }
+app_cmd() {
+  if [[ "${FAKE_BACKUP_FAIL:-}" == 1 ]]; then
+    echo "permission denied" >&2
+    return 1
+  fi
+  local out=""
+  while [[ $# -gt 0 ]]; do
+    if [[ "$1" == "-o" || "$1" == "--out" ]]; then out="$2"; shift; fi
+    shift
+  done
+  printf 'consistent\n' > "$out"
+}
+systemctl() { printf 'systemctl %s\n' "$*" >> "$INSTALL_DIR/calls"; }
+
+mkdir -p "$INSTALL_DIR/data"
+printf 'live-db\n' > "$INSTALL_DIR/data/uptime.db"
+printf 'wal-bytes\n' > "$INSTALL_DIR/data/uptime.db-wal"
+printf 'shm-bytes\n' > "$INSTALL_DIR/data/uptime.db-shm"
+rollback="$INSTALL_DIR/.rollback"
+rm -rf "$rollback"
+mkdir -p "$rollback"
+: > "$INSTALL_DIR/calls"
+backup_database "$rollback/db"
+if [[ "${DB_BACKUP_OK:-0}" != 1 ]]; then
+  [[ -f "$rollback/db/uptime.db" ]] && exit 2
+  systemctl stop "$SERVICE"
+  snapshot_database_files "$rollback/db"
+fi
+printf 'migrated\n' > "$INSTALL_DIR/data/uptime.db"
+rm -f "$INSTALL_DIR/data/uptime.db-wal" "$INSTALL_DIR/data/uptime.db-shm"
+printf 'new-wal\n' > "$INSTALL_DIR/data/uptime.db-wal"
+restore_database_backup "$rollback/db"
+"""
+
+
+def _db_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is not available")
+def test_update_backup_uses_a_service_owned_directory(tmp_path):
+    base = _install_tree(tmp_path, DB_HARNESS)
+    result = subprocess.run([BASH, str(tmp_path / "install-test.sh")], check=True, timeout=60,
+                            capture_output=True, text=True, encoding="utf-8")
+    calls = (base / "calls").read_text(encoding="utf-8")
+    assert "install -d -o v2uptime -m 700 " in calls
+    assert _db_text(base / ".rollback" / "db" / "uptime.db") == "consistent\n"
+    assert not (base / ".rollback" / "db" / "uptime.db-wal").exists()
+    assert "Database backup failed" not in result.stderr
+    assert _db_text(base / "data" / "uptime.db") == "consistent\n"
+    assert not (base / "data" / "uptime.db-wal").exists()  # migrated WAL is not kept
+
+
+@pytest.mark.skipif(BASH is None, reason="bash is not available")
+def test_update_backup_falls_back_after_stop_and_restores_wal(tmp_path):
+    base = _install_tree(tmp_path, DB_HARNESS)
+    result = subprocess.run([BASH, str(tmp_path / "install-test.sh")], check=True, timeout=60,
+                            capture_output=True, text=True, encoding="utf-8", env={**os.environ, "FAKE_BACKUP_FAIL": "1"})
+    assert "Database backup failed" in result.stderr
+    assert "uptime.db-wal and uptime.db-shm" in result.stderr
+    calls = (base / "calls").read_text(encoding="utf-8")
+    assert "systemctl stop v2uptime" in calls
+    assert _db_text(base / ".rollback" / "db" / "uptime.db") == "live-db\n"
+    assert _db_text(base / ".rollback" / "db" / "uptime.db-wal") == "wal-bytes\n"
+    assert _db_text(base / ".rollback" / "db" / "uptime.db-shm") == "shm-bytes\n"
+    assert _db_text(base / "data" / "uptime.db") == "live-db\n"
+    assert _db_text(base / "data" / "uptime.db-wal") == "wal-bytes\n"
+    assert _db_text(base / "data" / "uptime.db-shm") == "shm-bytes\n"
 
 
 @pytest.mark.skipif(BASH is None, reason="bash is not available")
