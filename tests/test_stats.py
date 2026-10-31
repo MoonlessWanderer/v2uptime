@@ -121,7 +121,9 @@ def test_public_status_hides_sensitive_and_hidden(database):
     visible = make_server("Visible", address="secret-host.example.com", port=20001)
     hidden = make_server("Hidden", public=False, port=20002)
     inactive = make_server("Inactive", active=False, port=20003)
-    add_checks(visible, now - 1200, "o" * 20)
+    # Newest check is at `now`, so it stays inside the half-hour that is still open.
+    # A start of now-1200 puts that check in the previous cell for the first minute of each half-hour.
+    add_checks(visible, now - 19 * 60, "o" * 20)
     live = LiveRegistry()
     live.seed(seed_rows(now - 3600))
     incidents = IncidentService()
