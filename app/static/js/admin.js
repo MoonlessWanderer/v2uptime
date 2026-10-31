@@ -179,6 +179,114 @@
     });
   }
 
+  /* maintenance: update and restart the panel, then follow it until it is back */
+  var maint = document.getElementById("maintenance");
+  if (maint) {
+    var statusUrl = maint.getAttribute("data-status-url");
+    var bootedAt = maint.getAttribute("data-started");
+    var buttons = maint.querySelectorAll("[data-maintenance]");
+    buttons.forEach(function (b) { b.setAttribute("data-off", b.disabled ? "1" : ""); });
+    var lock = function () { buttons.forEach(function (b) { b.disabled = true; }); };
+    var unlock = function () { buttons.forEach(function (b) { b.disabled = b.getAttribute("data-off") === "1"; }); };
+    var note = function (id, text, kind) {
+      var el = document.getElementById(id);
+      el.textContent = text;
+      el.className = "status-note" + (kind ? " is-" + kind : "");
+    };
+    var send = function (url) {
+      return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "X-CSRF-Token": csrf },
+        body: "{}",
+        credentials: "same-origin"
+      }).then(function (r) {
+        if (r.status === 401) { location.reload(); throw new Error("auth"); }
+        return r.json().catch(function () { return {}; }).then(function (data) {
+          if (!r.ok) throw new Error(data.error || "HTTP " + r.status);
+          return data;
+        });
+      });
+    };
+    var status = function () {
+      return fetch(statusUrl, { headers: { "Accept": "application/json" }, credentials: "same-origin", cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    };
+    /* step(elapsedMs) resolves true when done; a failed request means the panel is down for now */
+    var follow = function (step, onDown) {
+      var started = Date.now();
+      var tick = function () {
+        var elapsed = Date.now() - started;
+        status().then(function (s) { return step(s, elapsed); }, function () { return onDown(elapsed); })
+          .then(function (done) { if (!done) setTimeout(tick, 2000); });
+      };
+      setTimeout(tick, 1500);
+    };
+
+    var watchUpdate = function (since) {
+      lock();
+      note("update-note", "Waiting for the updater to start…");
+      follow(function (s, elapsed) {
+        var u = s.update;
+        var current = u.started_at !== null && u.started_at >= since - 5;
+        if (current && u.log) {
+          var logBox = document.getElementById("update-log");
+          logBox.textContent = u.log;
+          logBox.closest("details").open = true;
+        }
+        if (current && u.state === "running") {
+          note("update-note", "Updating… The panel restarts near the end.");
+          return false;
+        }
+        if (current && u.state) {
+          note("update-note", u.message, u.state === "ok" ? "ok" : "bad");
+          if (u.state === "ok") setTimeout(function () { location.reload(); }, 2500);
+          else unlock();
+          return true;
+        }
+        if (elapsed > 60000) {
+          note("update-note", "The updater has not started. On the server, check: systemctl status v2uptime-control.path", "bad");
+        }
+        return elapsed > 45 * 60000;
+      }, function (elapsed) {
+        note("update-note", "The panel is restarting with the new version…");
+        return elapsed > 45 * 60000;
+      });
+    };
+
+    var watchRestart = function () {
+      lock();
+      note("restart-note", "Restarting…");
+      var failed = function () {
+        note("restart-note", "The panel has not come back yet. On the server: sudo v2uptime, then 8 (Service status).", "bad");
+        return true;
+      };
+      follow(function (s, elapsed) {
+        if (String(s.process_started_at) !== bootedAt) {
+          note("restart-note", "The panel restarted.", "ok");
+          setTimeout(function () { location.reload(); }, 1200);
+          return true;
+        }
+        return elapsed > 120000 && failed();
+      }, function (elapsed) { return elapsed > 120000 && failed(); });
+    };
+
+    buttons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!window.confirm(btn.getAttribute("data-confirm"))) return;
+        var kind = btn.getAttribute("data-maintenance");
+        lock();
+        send(btn.getAttribute("data-url")).then(function (r) {
+          if (kind === "update") watchUpdate(r.requested_at); else watchRestart();
+        }).catch(function (err) {
+          if (err.message === "auth") return;
+          note(kind + "-note", err.message, "bad");
+          unlock();
+        });
+      });
+    });
+    if (maint.getAttribute("data-busy") === "1") watchUpdate(parseInt(maint.getAttribute("data-since"), 10));
+  }
+
   /* server detail charts */
   var history = document.querySelector("[data-history]");
   if (history && window.MiniChart) {

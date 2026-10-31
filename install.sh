@@ -19,6 +19,11 @@ NGINX_SITE="/etc/nginx/sites-available/v2uptime.conf"
 NGINX_LINK="/etc/nginx/sites-enabled/v2uptime.conf"
 STATE_FILE="$INSTALL_DIR/data/install-state"
 BACKUP_DIR="/root/v2uptime-backups"
+# Update from the admin panel: the panel (service user) only creates CONTROL_REQUEST; the root unit
+# ${SERVICE}-control.path sees it and runs "install.sh --control". Results go to CONTROL_DIR
+# (owned by root, readable by the panel).
+CONTROL_REQUEST="$INSTALL_DIR/data/control-request"
+CONTROL_DIR="$INSTALL_DIR/control"
 FONT_URLS=(
   "https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/fonts/webfonts/Vazirmatn%5Bwght%5D.woff2"
   "https://raw.githubusercontent.com/rastikerdar/vazirmatn/v33.003/fonts/webfonts/Vazirmatn%5Bwght%5D.woff2"
@@ -96,6 +101,7 @@ Options:
 
 Commands:
   probe ID [--count N]      time cold and warm requests through server ID (see README, Troubleshooting)
+  --setup-control           set up the root unit behind Settings → Maintenance → Update panel
 EOF
 }
 
@@ -255,7 +261,7 @@ get_source() {  # prints the path of an extracted source tree
 }
 
 # Files owned by the installation and never replaced by an update.
-PRESERVE=(config.py data logs bin venv .staging .rollback wheels xray)
+PRESERVE=(config.py data logs bin venv .staging .rollback wheels xray control)
 
 copy_source() {  # copy_source SRC DEST
   local src="$1" dest="$2" item name skip p
@@ -369,7 +375,14 @@ fix_permissions() {
   chmod 640 "$INSTALL_DIR/config.py"
   [[ -f "$INSTALL_DIR/bin/xray" ]] && chmod 755 "$INSTALL_DIR/bin/xray"
   chmod 755 "$INSTALL_DIR/install.sh" 2>/dev/null || true
+  if [[ -d "$CONTROL_DIR" ]]; then
+    chown -R root:"$APP_USER" "$CONTROL_DIR"
+    chmod 750 "$CONTROL_DIR"
+    find "$CONTROL_DIR" -type f -exec chmod 640 {} +
+  fi
 }
+
+installed_version() { sed -n 's/^__version__ = "\(.*\)"/\1/p' "$INSTALL_DIR/app/__init__.py" 2>/dev/null; }
 
 app_cmd() {  # run a main.py sub-command as the service user
   ( cd "$INSTALL_DIR" && runuser -u "$APP_USER" -- "$INSTALL_DIR/venv/bin/python" "$INSTALL_DIR/main.py" "$@" )
@@ -589,6 +602,80 @@ EOF
   systemctl enable "$SERVICE" >/dev/null 2>&1
 }
 
+write_control_units() {  # root helper behind Settings → Maintenance → Update panel
+  rm -f "$CONTROL_REQUEST"  # never act on a request left from before
+  cat > "/etc/systemd/system/${SERVICE}-control.path" <<EOF
+[Unit]
+Description=v2uptime — watch for update requests from the admin panel
+
+[Path]
+PathExists=${CONTROL_REQUEST}
+Unit=${SERVICE}-control.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  cat > "/etc/systemd/system/${SERVICE}-control.service" <<EOF
+[Unit]
+Description=v2uptime — run an update requested from the admin panel
+
+[Service]
+Type=oneshot
+ExecStart=${INSTALL_DIR}/install.sh --control
+Environment=V2UPTIME_REPO=${REPO_SLUG} V2UPTIME_BRANCH=${BRANCH}
+TimeoutStartSec=45min
+EOF
+  systemctl daemon-reload
+  systemctl enable --now "${SERVICE}-control.path" >/dev/null 2>&1
+  mkdir -p "$CONTROL_DIR"
+  printf '{"repo": %s, "branch": %s}\n' "$(json_str "$REPO_SLUG")" "$(json_str "$BRANCH")" > "$CONTROL_DIR/ready"
+  fix_permissions
+}
+
+json_str() {  # JSON string literal
+  local s="${1//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  printf '"%s"' "${s//$'\n'/ }"
+}
+
+control_status() {  # control_status STATE STARTED FINISHED MESSAGE — written atomically for the panel
+  local tmp="$CONTROL_DIR/status.json.tmp"
+  printf '{"action": "update", "state": %s, "started_at": %s, "finished_at": %s, "version": %s, "message": %s}\n' \
+    "$(json_str "$1")" "$2" "${3:-null}" "$(json_str "$(installed_version)")" "$(json_str "$4")" > "$tmp"
+  chown root:"$APP_USER" "$tmp"
+  chmod 640 "$tmp"
+  mv -f "$tmp" "$CONTROL_DIR/status.json"
+}
+
+run_control() {  # started by ${SERVICE}-control.service when the panel has created CONTROL_REQUEST
+  local action="" started rc=0 log="$CONTROL_DIR/last.log"
+  # The request file belongs to the service user: read at most a few bytes, never follow a link,
+  # and accept only the one known word. Nothing in it can change what is downloaded or run.
+  if [[ -f "$CONTROL_REQUEST" && ! -L "$CONTROL_REQUEST" ]]; then
+    action="$(head -c 16 "$CONTROL_REQUEST" | tr -cd 'a-z')"
+  fi
+  rm -f "$CONTROL_REQUEST"
+  if [[ "$action" != "update" ]]; then
+    warn "Ignoring an unknown request from the panel."
+    return 0
+  fi
+  mkdir -p "$CONTROL_DIR"
+  chown root:"$APP_USER" "$CONTROL_DIR"
+  chmod 750 "$CONTROL_DIR"
+  started="$(date +%s)"
+  : > "$log"
+  chown root:"$APP_USER" "$log"
+  chmod 640 "$log"
+  control_status running "$started" "" "Updating from version $(installed_version)…"
+  ( do_update ) >> "$log" 2>&1 || rc=$?
+  if (( rc == 0 )); then
+    control_status ok "$started" "$(date +%s)" "Updated to version $(installed_version)."
+  else
+    control_status failed "$started" "$(date +%s)" "The update failed; version $(installed_version) is running. See the log."
+  fi
+  return 0
+}
+
 wait_healthy() {
   local i
   for i in $(seq 1 40); do
@@ -680,6 +767,7 @@ do_install() {
   create_admin
 
   write_service
+  write_control_units
   setup_ssl
   fix_permissions
   systemctl restart "$SERVICE"
@@ -723,6 +811,8 @@ do_update() {
   systemctl start "$SERVICE"
   if wait_healthy; then
     rm -rf "$stage" "$rollback"
+    # The new install.sh refreshes the panel-update helper units it ships with.
+    "$INSTALL_DIR/install.sh" --setup-control || warn "Could not refresh the panel update helper."
     ok "Updated to $new_version"
     return 0
   fi
@@ -871,8 +961,10 @@ uninstall() {
   warn "This removes the service, ALL files, the database, the nginx site and the certificate."
   confirm "Continue?" || return 0
   [[ "$(ask "Type DELETE to confirm")" == "DELETE" ]] || { info "Cancelled."; return 0; }
-  systemctl disable --now "$SERVICE" >/dev/null 2>&1 || true
-  rm -f "/etc/systemd/system/${SERVICE}.service"; systemctl daemon-reload
+  systemctl disable --now "$SERVICE" "${SERVICE}-control.path" >/dev/null 2>&1 || true
+  rm -f "/etc/systemd/system/${SERVICE}.service" "/etc/systemd/system/${SERVICE}-control.path" \
+    "/etc/systemd/system/${SERVICE}-control.service"
+  systemctl daemon-reload
   rm -f "$NGINX_LINK" "$NGINX_SITE"; systemctl reload nginx >/dev/null 2>&1 || true
   if [[ "${SSL_MODE:-}" == "letsencrypt" && -n "${DOMAIN:-}" ]]; then certbot delete --cert-name "$DOMAIN" -n >/dev/null 2>&1 || true; fi
   rm -f "$CMD_PATH"
@@ -933,9 +1025,19 @@ main() {
     app_cmd probe "$@" || exit $?
     exit 0
   fi
+  if [[ "${1:-}" == "--control" || "${1:-}" == "--setup-control" ]]; then  # used by systemd and by updates
+    require_root
+    is_installed || die "v2uptime is not installed."
+    TMP_ROOT="$(mktemp -d /tmp/v2uptime.XXXXXX)"
+    if [[ "$1" == "--control" ]]; then run_control; else write_control_units; fi
+    exit 0
+  fi
   parse_args "$@"
   require_root
   TMP_ROOT="$(mktemp -d /tmp/v2uptime.XXXXXX)"
+  if is_installed && [[ ! -f "$CONTROL_DIR/ready" ]]; then
+    write_control_units && ok "Update from the admin panel is enabled (Settings → Maintenance)."
+  fi
   if [[ -n "$PROXY" ]]; then
     export http_proxy="$PROXY" https_proxy="$PROXY" HTTP_PROXY="$PROXY" HTTPS_PROXY="$PROXY" ALL_PROXY="$PROXY"
     export no_proxy="127.0.0.1,localhost" NO_PROXY="127.0.0.1,localhost"

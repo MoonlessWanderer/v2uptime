@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0
+
+- **Settings → Maintenance**: update and restart the panel from the admin panel. Update runs the same update as menu item 2 (download, new virtualenv, swap, health check, rollback), through a small root unit (`v2uptime-control.path`) that the installer sets up; the panel itself still has no root access. The page follows the update, shows its log, and reloads when the new version is up. Restart stops the panel and systemd starts it again.
+- After updating an older installation, run `sudo v2uptime` once to set up the unit; the Maintenance page says so until then.
+- `sudo v2uptime --setup-control` sets up the unit again. Uninstall removes it.
+
 ## 1.1.0
 
 ### Ping measures a request on an open connection

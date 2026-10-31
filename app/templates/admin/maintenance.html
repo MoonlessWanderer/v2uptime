@@ -1,0 +1,53 @@
+{% extends "admin/base.html" %}
+{% block page_title %}Maintenance{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Settings</h1></div>
+{% include "admin/_tabs.html" %}
+{% set update = info['update'] %}{# not info.update: that is dict.update #}
+{% set busy = update.state == 'running' or update.pending %}
+{% set pills = {'ok': 'pill-ok', 'failed': 'pill-bad', 'interrupted': 'pill-warn', 'running': 'pill-warn'} %}
+{% set labels = {'ok': 'Done', 'failed': 'Failed', 'interrupted': 'Interrupted', 'running': 'Running'} %}
+<div class="grid-2" id="maintenance" data-status-url="{{ admin_url('/maintenance/status.json') }}"
+     data-started="{{ info.process_started_at or '' }}" data-busy="{{ '1' if busy else '' }}"
+     data-since="{{ update.started_at if update.state == 'running' else info.now - 60 }}">
+  <section class="panel">
+    <h2>Update</h2>
+    <dl class="kv">
+      <dt>Installed version</dt><dd>{{ info.version }}</dd>
+      <dt>Source</dt><dd class="ltr">{% if info.helper %}github.com/{{ info.helper.repo }} ({{ info.helper.branch }}){% else %}—{% endif %}</dd>
+      <dt>Last update</dt><dd>{% if update.state %}<span class="pill {{ pills[update.state] }}">{{ labels[update.state] }}</span> {{ update.started_at|time_tag("datetime") }} · {{ update.message }}{% else %}None from the panel yet{% endif %}</dd>
+    </dl>
+    <p class="muted">Downloads the latest version and prepares it next to the running one, then restarts the panel. Settings, the database, and Xray are kept. If the new version does not start, the previous one is restored. The panel is offline for about a minute.</p>
+    {% if not info.helper %}
+    <div class="alert alert-info">To update from here, run <code>sudo v2uptime</code> once on the server (open the menu, then choose 0). It sets up a small root service that runs the update; the panel itself has no root access. Until then, use item 2 of that menu.</div>
+    {% endif %}
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" data-maintenance="update" data-url="{{ admin_url('/maintenance/update') }}"
+              data-confirm="Update the panel now? It will be offline for about a minute." {{ 'disabled' if not info.helper or busy }}>
+        <svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Update panel</button>
+    </div>
+    <p class="status-note" id="update-note" role="status"></p>
+    <details class="advanced"{{ ' open' if update.state in ('failed', 'interrupted') }}>
+      <summary>Log of the last update</summary>
+      <pre class="log-box ltr" id="update-log">{{ update.log or 'No update has run from the panel yet.' }}</pre>
+    </details>
+  </section>
+
+  <section class="panel">
+    <h2>Restart</h2>
+    <dl class="kv">
+      <dt>Running since</dt><dd>{{ info.process_started_at|time_tag("datetime") }}{% if info.process_started_at %} · up {{ (info.now - info.process_started_at)|duration }}{% endif %}</dd>
+    </dl>
+    <p class="muted">Stops and starts the panel and its Xray. Checks pause for a few seconds; no data is lost.</p>
+    {% if not info.can_restart %}
+    <div class="alert alert-info">Restart works when the panel runs as the v2uptime systemd service. Otherwise use <code>sudo v2uptime</code>, item 4.</div>
+    {% endif %}
+    <div class="form-actions">
+      <button type="button" class="btn" data-maintenance="restart" data-url="{{ admin_url('/maintenance/restart') }}"
+              data-confirm="Restart the panel now?" {{ 'disabled' if not info.can_restart or busy }}>
+        <svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Restart panel</button>
+    </div>
+    <p class="status-note" id="restart-note" role="status"></p>
+  </section>
+</div>
+{% endblock %}

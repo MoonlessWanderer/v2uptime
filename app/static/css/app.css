@@ -378,6 +378,9 @@ tr.drop-target td { box-shadow: inset 0 2px 0 var(--accent); }
 .login-card { width: 100%; max-width: 380px; }
 .login-card h1 { font-size: 1.3rem; margin-bottom: 4px; }
 .test-result { font-size: 12.5px; margin-inline-start: 6px; }
+.status-note { margin: 10px 0 0; min-height: 1.5em; font-size: 14px; color: var(--text-2); }
+.status-note.is-ok { color: var(--ok); }
+.status-note.is-bad { color: var(--bad); }
 .toast {
   position: fixed; bottom: 18px; inset-inline-start: 50%; transform: translateX(50%); z-index: 70;
   background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 10px; box-shadow: var(--shadow-lg); font-size: 14px;

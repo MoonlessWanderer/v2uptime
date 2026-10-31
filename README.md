@@ -85,6 +85,17 @@ sudo v2uptime --from-archive ./v2uptime-1.1.0-linux-amd64.tar.gz
 
 Then choose **2) Update**.
 
+### From the admin panel
+
+**Settings → Maintenance** has two buttons:
+
+- **Update panel** runs the same update as menu item 2, from the same GitHub repository and branch, including the rollback. The page follows it, shows the log, and reloads when the new version is up. The panel is offline for about a minute.
+- **Restart panel** stops the panel and its Xray; systemd starts them again within a few seconds (`Restart=always`).
+
+The panel runs as an unprivileged user and cannot update itself. The installer sets up a small root unit, `v2uptime-control.path`. The panel only creates `data/control-request` containing the word `update`. The unit sees the file and runs `install.sh --control`, which accepts only that word and runs the normal update. The result goes to `/opt/v2uptime/control/` (owned by root, readable by the panel). Nothing the panel writes can change what is downloaded or run.
+
+On an installation from before 1.2.0, run `sudo v2uptime` once after updating (open the menu and choose 0); that sets up the unit. Until then the Update button is disabled and the page says so. An update started from the panel cannot use `--proxy`, `--pip-mirror`, or `--from-archive`. It falls back to a monitored server for downloads, as the menu does. If it fails, update from the menu with those flags.
+
 ## Management menu
 
 `sudo v2uptime`

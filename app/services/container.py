@@ -6,12 +6,13 @@ import asyncio
 import logging
 from typing import Awaitable, Callable, Iterable
 
-from app.config import Config
+from app.config import BASE_DIR, Config
 from app.db import run_db
 from app.models import Server
 from app.services import events as ev
 from app.services.aggregator import Aggregator
 from app.services.checker import Checker
+from app.services.control import Control
 from app.services.incidents import IncidentService
 from app.services.monitor import Monitor
 from app.services.proxy_pool import ProxyPool
@@ -44,6 +45,7 @@ class Services:
         self.checker = Checker(self.xray, self.monitor.handle_cycle)
         self.aggregator = Aggregator(on_done=self.stats.invalidate)
         self.subscriptions = SubscriptionService(self.proxy_pool, self.after_servers_changed)
+        self.control = Control(BASE_DIR)
         self.tasks: list[asyncio.Task[None]] = []
         self.started_at: int | None = None
 

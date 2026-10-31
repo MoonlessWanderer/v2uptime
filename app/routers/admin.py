@@ -8,6 +8,7 @@ panel can move without a restart and the internal prefix is never reachable.
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,6 +16,7 @@ from fastapi.responses import JSONResponse, RedirectResponse, Response
 from peewee import JOIN, fn
 from starlette.datastructures import FormData, UploadFile
 
+from app import __version__
 from app.db import run_db
 from app.models import Admin, Check, Incident, Server, Subscription
 from app.security import (
@@ -30,6 +32,7 @@ from app.security import (
 from app.services import backup as backup_service
 from app.services import servers as server_service
 from app.services.checker import error_label
+from app.services.control import ControlError
 from app.services.parser import LinkParseError, parse_many
 from app.services.settings import (
     ADVANCED_KEYS, BY_KEY, DEFINITIONS, SettingError, mask_secret, settings, validate,
@@ -40,6 +43,7 @@ from app.services.telegram.outbox_worker import queue_stats
 from app.timeutil import DAY, now_ts
 from app.web import ADMIN_INTERNAL_PREFIX, admin_url, render
 
+log = logging.getLogger(__name__)
 router = APIRouter(prefix=ADMIN_INTERNAL_PREFIX, include_in_schema=False)
 
 
@@ -625,3 +629,49 @@ async def backup_import(request: Request):
         flash(request, "warn", error)
     return redirect("/backup")
 
+
+# ------------------------------------------------------------ maintenance
+
+def _maintenance_info(request: Request) -> dict[str, Any]:
+    svc = services(request)
+    return {"version": __version__, "now": now_ts(), "process_started_at": svc.started_at,
+            "can_restart": svc.control.can_restart(), "helper": svc.control.helper(),
+            "update": svc.control.update_status()}
+
+
+@router.get("/maintenance")
+async def maintenance_page(request: Request):
+    admin = await require_admin(request)
+    return page(request, "maintenance.html", admin, "settings", section="settings", tab="maintenance",
+                info=_maintenance_info(request))
+
+
+@router.get("/maintenance/status.json")
+async def maintenance_status(request: Request):
+    await require_admin(request)
+    return JSONResponse(_maintenance_info(request), headers={"Cache-Control": "no-store"})
+
+
+@router.post("/maintenance/update")
+async def maintenance_update(request: Request):
+    admin = await require_admin(request)
+    await checked_json(request)
+    try:
+        requested_at = services(request).control.request_update()
+    except ControlError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=409)
+    log.info("panel update requested", extra={"admin": admin.username})
+    return {"ok": True, "requested_at": requested_at}
+
+
+@router.post("/maintenance/restart")
+async def maintenance_restart(request: Request):
+    admin = await require_admin(request)
+    await checked_json(request)
+    svc = services(request)
+    try:
+        svc.control.schedule_restart()
+    except ControlError as exc:
+        return JSONResponse({"ok": False, "error": str(exc)}, status_code=409)
+    log.info("panel restart requested", extra={"admin": admin.username})
+    return {"ok": True, "process_started_at": svc.started_at}

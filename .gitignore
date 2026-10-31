@@ -9,6 +9,7 @@ venv/
 /bin/
 /.staging/
 /.rollback/
+/control/
 *.db
 *.db-wal
 *.db-shm
