@@ -397,16 +397,16 @@ def check_open_card(browser, panel: Panel, failures: list[str]) -> None:
     settle(page)
     card = open_card(page, panel.ids["Amsterdam WS 🇳🇱"])
     day = card.evaluate(OPEN_STATE)
-    if not (day["open"] and day["closedBarHidden"] and day["range"] == "24h" and day["cells"] == 48):
-        failures.append(f"open card (24h): {day}")
+    if not (day["open"] and day["closedBarHidden"] and day["range"] == "1h" and day["cells"] == 12):
+        failures.append(f"open card (1h): {day}")
     if max(abs(e) for e in day["edges"]) > 1:
         failures.append(f"bar and chart edges differ by {day['edges']}")
-    if not day["label"].startswith("Ping over the last 24 hours, average "):
+    if not day["label"].startswith("Ping over the last 1 hour, average "):
         failures.append(f"chart label: {day['label']!r}")
-    print(f"  opened by its status line; 24h: {day['cells']} cells, {day['stats']}, "
+    print(f"  opened by its status line; 1h: {day['cells']} cells, {day['stats']}, "
           f"bar/chart edge offset {day['edges'][0]:.2f}/{day['edges'][1]:.2f}px")
-    seen = {day["stats"]: "24h"}
-    for range_key, cells in (("7d", 42), ("30d", 30)):
+    seen = {day["stats"]: "1h"}
+    for range_key, cells in (("24h", 48), ("7d", 42), ("30d", 30)):
         with page.expect_response(lambda r, k=range_key: f"range={k}" in r.url):
             card.locator(f'.range-seg [data-range="{range_key}"]').click()
         settle(page)
@@ -421,7 +421,7 @@ def check_open_card(browser, panel: Panel, failures: list[str]) -> None:
         print(f"  {range_key}: {state['cells']} cells, {state['stats']}")
     requests = []
     page.on("request", lambda r: requests.append(r.url) if "/history" in r.url else None)
-    card.locator('.range-seg [data-range="24h"]').click()
+    card.locator('.range-seg [data-range="1h"]').click()
     page.wait_for_timeout(300)
     if requests:
         failures.append(f"switching back to a cached range sent {requests}")

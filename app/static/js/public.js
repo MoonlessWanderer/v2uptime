@@ -6,7 +6,8 @@
   "use strict";
 
   var REFRESH_MS = 60000;
-  var RANGES = ["24h", "7d", "30d"];
+  var RANGES = ["1h", "24h", "7d", "30d"];
+  var DEFAULT_RANGE = "1h";
   var T = window.UptimeTime;
   // LTR isolate, not first-strong: "99.86%" and "12:00–12:30" have no strong letter, so in a
   // Persian tooltip a first-strong isolate would follow the surrounding RTL direction.
@@ -76,7 +77,7 @@
     hideTip();
     showOpen(card, open);
     state.open[id] = open;
-    if (open) showRange(card, state.ranges[id] || "24h");
+    if (open) showRange(card, state.ranges[id] || DEFAULT_RANGE);
   }
 
   function markRange(card, range) {
@@ -103,7 +104,7 @@
   function render(card, range, data) {
     var collecting = card.getAttribute("data-collecting") === "1";
     var avg = data.summary.avg_latency;
-    setStat(card, "uptime", collecting && range !== "24h" ? "—" : percent(data.summary.uptime));
+    setStat(card, "uptime", collecting && range !== "1h" && range !== "24h" ? "—" : percent(data.summary.uptime));
     setStat(card, "ping", ms(avg));
     setStat(card, "incidents", String(data.incident_stats.count));
     var timeline = card.querySelector(".timeline");
@@ -151,7 +152,7 @@
       if (!state.open[id]) return;
       var card = cardOf(id);
       if (!card) return;
-      var range = state.ranges[id] || "24h", stale = cache[id + ":" + range];
+      var range = state.ranges[id] || DEFAULT_RANGE, stale = cache[id + ":" + range];
       RANGES.forEach(function (r) { delete cache[id + ":" + r]; });
       showOpen(card, true);
       markRange(card, range);
@@ -195,15 +196,6 @@
     return fill("tip_uptime", { value: iso(percent(u)) });
   }
 
-  function pingIn(points, start, end) {
-    var from = Date.parse(start), to = Date.parse(end), sum = 0, n = 0;
-    points.forEach(function (p) {
-      var t = Date.parse(p.t);
-      if (t >= from && t < to && p.latency !== null && p.latency !== undefined) { sum += p.latency; n++; }
-    });
-    return n ? sum / n : null;
-  }
-
   function showTip(text) {
     tooltip.textContent = text;
     tooltip.hidden = false;
@@ -242,21 +234,47 @@
     tipFor = barsEl;
   }
 
-  /* Open card: bar and chart share one time axis; a vertical line marks the cell under the pointer.
-     The tooltip goes above the bar beside the numbers when there is room, else into the chart next to the line. */
+  /* The slot that contains t. endOf(i) is that slot's end in ms. */
+  function slotAt(items, t, endOf) {
+    var i, start, end, first = Infinity;
+    for (i = 0; i < items.length; i++) {
+      start = Date.parse(items[i].t || items[i].start);
+      if (i === 0) first = start;
+      end = endOf(i);
+      if (t >= start && t < end) return i;
+    }
+    if (!items.length) return -1;
+    return t < first ? 0 : items.length - 1;
+  }
+
+  /* Open card: the line is one point per slot. The tooltip is that point, not the average of the
+     wider status-bar cell. The cursor sits on the point; the bar cell that contains it is highlighted.
+     The tooltip goes above the bar beside the numbers when there is room, else into the chart. */
   function pointTimeline(timeline, clientX) {
     var data = timeline._data;
-    if (!data || !data.bars.length || !T) return;
-    var n = data.bars.length, i = indexAt(timeline, clientX, n), b = data.bars[i];
-    var ping = pingIn(data.points, b.start, b.end);
-    var pingText = ping === null ? T.word("tip_noping") : iso(Math.round(ping) + " ms");
-    var text = iso(spanText(b.start, b.end, timeline._range)) + " · " + uptimeText(b.uptime) + " · " + pingText;
-    var box = timeline.getBoundingClientRect(), x = (i + 0.5) / n * box.width;
+    if (!data || !data.bars.length || !data.points.length || !T) return;
+    var box = timeline.getBoundingClientRect();
+    var axisStart = Date.parse(data.bars[0].start);
+    var axisEnd = Date.parse(data.bars[data.bars.length - 1].end);
+    var span = axisEnd - axisStart;
+    if (!(span > 0)) return;
+    var at = axisStart + clamp((clientX - box.left) / box.width, 0, 0.999999) * span;
+    var step = data.points.length > 1 ? Date.parse(data.points[1].t) - Date.parse(data.points[0].t) : span;
+    var pi = slotAt(data.points, at, function (i) { return Date.parse(data.points[i].t) + step; });
+    var point = data.points[pi];
+    var pStart = Date.parse(point.t);
+    var pEnd = pStart + step;
+    var ping = point.latency;
+    var pingText = ping === null || ping === undefined ? T.word("tip_noping") : iso(Math.round(ping) + " ms");
+    var text = iso(spanText(point.t, new Date(pEnd).toISOString(), timeline._range)) + " · " +
+      uptimeText(point.uptime) + " · " + pingText;
+    var x = clamp(((pStart + pEnd) / 2 - axisStart) / span * box.width, 0, box.width);
     var cursor = timeline.querySelector(".cursor");
     cursor.style.left = x + "px";
     cursor.hidden = false;
     var barsEl = timeline.querySelector(".range-bars");
-    highlight(barsEl, i);
+    var bi = slotAt(data.bars, at, function (i) { return Date.parse(data.bars[i].end); });
+    highlight(barsEl, bi);
 
     var t = showTip(text), lineX = box.left + x, left, top;
     var card = timeline.closest(".card").getBoundingClientRect();

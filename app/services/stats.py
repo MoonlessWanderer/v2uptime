@@ -3,7 +3,7 @@
 Definitions (documented in README):
 
 * **Uptime %** = ok / (ok + fail).  ``unknown`` checks are ignored.
-  24h comes from raw checks; 7d / 30d from ``HourlyStat`` plus raw checks
+  1h and 24h come from raw checks; 7d / 30d from ``HourlyStat`` plus raw checks
   newer than the aggregator's progress (``agg_until``).
 * **Ping** (public list) = median latency of successful checks in the last
   10 minutes, or the last value when there are none.
@@ -60,9 +60,14 @@ from app.timeutil import (
 )
 
 RANGES: dict[str, int] = {"24h": DAY, "7d": 7 * DAY, "30d": 30 * DAY}
-RANGE_LABELS = {"24h": "24h", "7d": "7d", "30d": "30d"}
-BAR_SPEC: dict[str, tuple[int, int]] = {"24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY)}
-HISTORY_STEP: dict[str, int] = {"24h": 300, "7d": HOUR, "30d": 6 * HOUR}
+# Open-card history. ``1h`` is not part of ``RANGES``: status bars and the admin stay on 24h/7d/30d.
+HISTORY_RANGES: dict[str, int] = {"1h": HOUR, **RANGES}
+RANGE_LABELS = {"1h": "1h", "24h": "24h", "7d": "7d", "30d": "30d"}
+BAR_SPEC: dict[str, tuple[int, int]] = {
+    "1h": (12, 300), "24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY),
+}
+HISTORY_STEP: dict[str, int] = {"1h": 60, "24h": 300, "7d": HOUR, "30d": 6 * HOUR}
+_RAW_RANGES = ("1h", "24h")
 MIN_CHECKS_FOR_RANKING = 10
 PING_WINDOW = 600  # public ping: median of the successful checks in the last 10 minutes
 JITTER_REFERENCE_MS = 500.0
@@ -292,6 +297,17 @@ def series_rows(since: int, server_id: int | None = None) -> list[tuple[int, int
     return rows
 
 
+def _bucket_medians(buckets: list[Bucket], samples: Iterable[tuple[int, int]]) -> list[int | None]:
+    """Median latency in each bucket. One slow check does not set the point."""
+    starts = [bucket.start for bucket in buckets]
+    groups: list[list[int]] = [[] for _ in buckets]
+    for ts, latency in samples:
+        index = bisect_right(starts, ts) - 1
+        if 0 <= index < len(buckets) and ts < buckets[index].end:
+            groups[index].append(int(latency))
+    return [_round(median(group), 0) if group else None for group in groups]
+
+
 def bucketize(buckets: list[Bucket], rows: Iterable[tuple[int, int, Counts]]) -> dict[int, list[Counts]]:
     starts = [b.start for b in buckets]
     out: dict[int, list[Counts]] = {}
@@ -304,7 +320,7 @@ def bucketize(buckets: list[Bucket], rows: Iterable[tuple[int, int, Counts]]) ->
 
 def bar_counts(range_key: str, buckets: list[Bucket], server_id: int | None = None) -> dict[int, list[Counts]]:
     start = buckets[0].start
-    if range_key == "24h":  # exact 30-minute buckets from raw data
+    if range_key in _RAW_RANGES:  # exact buckets from raw checks; hourly rows are too coarse
         size = buckets[0].end - buckets[0].start
         where, params = _server_filter(server_id)
         cursor = db.execute_sql(
@@ -541,7 +557,7 @@ class StatsService:
 
     # ----------------------------------------------------------- history
     def server_history(self, server_id: int, range_key: str) -> dict[str, Any]:
-        range_key = range_key if range_key in RANGES else "24h"
+        range_key = range_key if range_key in HISTORY_RANGES else "24h"
         return self._cached(("history", server_id, range_key),
                             lambda: self._compute_history(server_id, range_key))
 
@@ -550,15 +566,23 @@ class StatsService:
         tz = settings.tz
         server = Server.get_by_id(server_id)
         step = HISTORY_STEP[range_key]
-        buckets = fixed_buckets(now, step, RANGES[range_key] // step, tz)
-        if range_key == "24h":
+        buckets = fixed_buckets(now, step, HISTORY_RANGES[range_key] // step, tz)
+        if range_key in _RAW_RANGES:
             cursor = db.execute_sql(
-                f"SELECT server_id, (checked_at / 300) * 300 AS slot, {_COUNT_COLUMNS} FROM checks "
-                "WHERE checked_at >= ? AND server_id = ? GROUP BY slot", [buckets[0].start, server_id])
+                f"SELECT server_id, (checked_at / ?) * ? AS slot, {_COUNT_COLUMNS} FROM checks "
+                "WHERE checked_at >= ? AND server_id = ? GROUP BY slot",
+                [step, step, buckets[0].start, server_id])
             rows = [(r[0], r[1], _counts(r[2:])) for r in cursor.fetchall()]
         else:
             rows = series_rows(buckets[0].start, server_id)
         series = bucketize(buckets, rows).get(server_id) or [Counts() for _ in buckets]
+        medians = None
+        if range_key in _RAW_RANGES:
+            samples = db.execute_sql(
+                "SELECT checked_at, latency_ms FROM checks "
+                "WHERE server_id = ? AND checked_at >= ? AND latency_ms IS NOT NULL",
+                [server_id, buckets[0].start]).fetchall()
+            medians = _bucket_medians(buckets, samples)
         bar_buckets = make_buckets(range_key, now, tz)
         bar_counts_ = bar_counts(range_key, bar_buckets, server_id).get(server_id) or [Counts() for _ in bar_buckets]
         bar_starts = [i.started_at for i in incidents_overlapping(bar_buckets[0].start, now, server_id)]
@@ -566,13 +590,14 @@ class StatsService:
                 for b, item in zip(bar_buckets, bar_items(bar_buckets, bar_counts_, bar_starts))]
         points = [{
             "t": iso_utc(b.start), "label": fmt_datetime(b.start, tz),
-            "latency": _round(c.avg_latency, 0), "uptime": _round(c.uptime, 2), "checks": c.valid,
-        } for b, c in zip(buckets, series)]
+            "latency": medians[i] if medians is not None else _round(c.avg_latency, 0),
+            "uptime": _round(c.uptime, 2), "checks": c.valid,
+        } for i, (b, c) in enumerate(zip(buckets, series))]
 
-        since = now - RANGES[range_key]
+        since = now - HISTORY_RANGES[range_key]
         total = window_counts(since, now, server_id).get(server_id, Counts())
         p95 = None
-        if range_key == "24h":
+        if range_key in _RAW_RANGES:
             latencies = [r[0] for r in db.execute_sql(
                 "SELECT latency_ms FROM checks WHERE server_id = ? AND checked_at >= ? AND latency_ms IS NOT NULL",
                 [server_id, since]).fetchall()]

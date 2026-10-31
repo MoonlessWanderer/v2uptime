@@ -73,7 +73,7 @@
   var EN = {
     dur_d: "{n}d", dur_h: "{n}h", dur_m: "{n}m", dur_s: "{n}s", dur_join: " ",
     ago_just: "just now", ago_m: "{n}m ago", ago_h: "{n}h ago", ago_d: "{n}d ago",
-    axis_24h: "24h ago", axis_now: "now", axis_today: "today"
+    axis_1h: "1h ago", axis_24h: "24h ago", axis_now: "now", axis_today: "today"
   };
 
   function pageLang(explicit) {

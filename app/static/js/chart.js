@@ -214,7 +214,12 @@
   function timeTicks(bars, range, start, end) {
     var T = window.UptimeTime, ticks = [];
     if (!T || !bars.length) return ticks;
-    if (range === "24h") {
+    if (range === "1h") {
+      ticks.push({ t: start, text: T.axisLabel("axis_1h"), align: "left" });
+      var mid = bars[Math.floor((bars.length - 1) / 2)];
+      if (mid) ticks.push({ t: Date.parse(mid.start), text: T.formatTime(mid.start), align: "center" });
+      ticks.push({ t: end, text: T.axisLabel("axis_now"), align: "right" });
+    } else if (range === "24h") {
       ticks.push({ t: start, text: T.axisLabel("axis_24h"), align: "left" });
       bars.forEach(function (b) {
         var hm = T.formatTime(b.start);

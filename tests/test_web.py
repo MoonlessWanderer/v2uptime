@@ -402,7 +402,8 @@ def test_closed_cards_show_name_ping_bar_and_status(client):
         assert closed.count("data-t=") == sum(cell["at"] is not None for cell in hour)
         assert 'class="card-range">1h<svg' in closed
         assert 'aria-label="Status for the last hour"' in closed
-        assert 'data-range="24h"' in card
+        assert 'data-range="1h" aria-pressed="true"' in card
+        assert 'data-range="24h" aria-pressed="false"' in card
         ping = re.sub(r"<[^>]+>", "", re.search(r'<span class="card-ping[^"]*">(.*?)</span>', card).group(1))
         assert ping == (f"{cards[server.id]['ping_ms']} ms" if cards[server.id]["ping_ms"] is not None else "—")
     down_for = fmt_duration(cards[servers["down"].id]["last_incident"]["duration_seconds"], coarse=True)

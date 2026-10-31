@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.db import run_db
 from app.models import Server
-from app.services.stats import RANGES
+from app.services.stats import HISTORY_RANGES, RANGES
 
 router = APIRouter()
 
@@ -21,6 +21,10 @@ FORWARD_HEADERS = ("x-forwarded-for", "x-real-ip", "forwarded")
 
 def _range(value: str | None) -> str:
     return value if value in RANGES else "24h"
+
+
+def _history_range(value: str | None) -> str:
+    return value if value in HISTORY_RANGES else "24h"
 
 
 def _is_public(server_id: int) -> bool:
@@ -38,7 +42,7 @@ async def api_status(request: Request, range: str | None = None):
 async def api_history(request: Request, server_id: int, range: str | None = None):
     if not await run_db(_is_public, server_id):
         raise HTTPException(status_code=404, detail="Server not found")
-    data = await run_db(request.app.state.services.stats.server_history, server_id, _range(range))
+    data = await run_db(request.app.state.services.stats.server_history, server_id, _history_range(range))
     return JSONResponse(data, headers={"Cache-Control": "public, max-age=30"})
 
 

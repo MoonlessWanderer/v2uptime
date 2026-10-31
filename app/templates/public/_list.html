@@ -33,7 +33,8 @@
     </div>
     <div class="card-detail" id="detail-{{ s.id }}" hidden>
       <div class="segmented range-seg" role="group" aria-label="{{ t('range_group') }}">
-        <button type="button" class="seg is-active" data-range="24h" aria-pressed="true">{{ t('range_24h') }}</button>
+        <button type="button" class="seg is-active" data-range="1h" aria-pressed="true">{{ t('range_1h') }}</button>
+        <button type="button" class="seg" data-range="24h" aria-pressed="false">{{ t('range_24h') }}</button>
         <button type="button" class="seg" data-range="7d" aria-pressed="false">{{ t('range_7d') }}</button>
         <button type="button" class="seg" data-range="30d" aria-pressed="false">{{ t('range_30d') }}</button>
       </div>
