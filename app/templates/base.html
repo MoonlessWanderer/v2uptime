@@ -11,7 +11,7 @@
   <script src="{{ static_url('js/theme.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" data-tz="{{ settings.tz }}" data-tz-label="{{ tz_label(settings.tz) }}">
 {% include "_icons.html" %}
 {% block body %}{% endblock %}
 {% block scripts %}{% endblock %}

@@ -17,8 +17,8 @@
     <thead><tr><th>سرور</th><th>شروع</th><th>پایان</th><th class="num">مدت</th><th>علت</th></tr></thead>
     <tbody>{% for i in incidents %}
       <tr><td><a href="{{ admin_url('/servers/' ~ i.server.id) }}">{{ i.server.name }}</a></td>
-        <td>{{ i.started_at|dt }}</td>
-        <td>{% if i.ended_at %}{{ i.ended_at|dt }}{% else %}<span class="pill pill-bad">ادامه دارد</span>{% endif %}</td>
+        <td>{{ i.started_at|time_tag("datetime") }}</td>
+        <td>{% if i.ended_at %}{{ i.ended_at|time_tag("datetime") }}{% else %}<span class="pill pill-bad">ادامه دارد</span>{% endif %}</td>
         <td class="num">{{ ((i.ended_at or now) - i.started_at)|duration }}</td>
         <td>{{ i.error_type|error_label }}</td></tr>
     {% else %}<tr><td colspan="5" class="muted">در این بازه قطعی‌ای ثبت نشده است.</td></tr>{% endfor %}</tbody>
@@ -33,7 +33,7 @@
     <tbody>{% for s in servers %}
       <tr><td>{{ s.name }}</td>
       {% for key in ranges %}{% set st = per_range[key].get(s.id) %}
-        <td class="num">{{ (st.count if st else 0)|fa }}</td>
+        <td class="num">{{ (st.count if st else 0) }}</td>
         <td class="num">{{ st.downtime|duration if st else '—' }}</td>
         <td class="num">{{ st.mttr|duration if st and st.mttr is not none else '—' }}</td>
         <td class="num">{{ st.longest|duration if st else '—' }}</td>

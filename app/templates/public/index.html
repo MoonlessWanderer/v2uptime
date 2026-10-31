@@ -50,6 +50,7 @@
 
 <footer class="site-footer container">
   <p>صفحه هر ۶۰ ثانیه به‌صورت خودکار بروز می‌شود. وضعیت‌ها حاصل تست واقعی اتصال از محل تست است.</p>
+  <p>Times are shown in {{ tz_label(settings.tz) }} ({{ settings.tz }})</p>
 </footer>
 
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
@@ -86,6 +87,7 @@
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ static_url('js/time.js') }}" defer></script>
 <script src="{{ static_url('js/chart.js') }}" defer></script>
 <script src="{{ static_url('js/public.js') }}" defer></script>
 {% endblock %}

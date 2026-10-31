@@ -27,8 +27,8 @@
     </div>
   </div>
   <dl class="kv" style="margin-bottom:12px">
-    <dt>سرورها</dt><dd>{{ (counts.get(sub.id, 0))|fa }} (در آخرین همگام‌سازی: {{ sub.last_count|fa }})</dd>
-    <dt>آخرین همگام‌سازی</dt><dd>{{ sub.last_sync|dt if sub.last_sync else '—' }}</dd>
+    <dt>سرورها</dt><dd>{{ counts.get(sub.id, 0) }} (در آخرین همگام‌سازی: {{ sub.last_count }})</dd>
+    <dt>آخرین همگام‌سازی</dt><dd>{{ sub.last_sync|time_tag("datetime") }}</dd>
     {% if sub.last_error %}<dt>آخرین خطا</dt><dd class="pill-bad">{{ sub.last_error }}</dd>{% endif %}
   </dl>
   <form method="post" action="{{ admin_url('/subscriptions/' ~ sub.id ~ '/edit') }}" class="form-grid">

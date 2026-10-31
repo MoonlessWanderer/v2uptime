@@ -217,7 +217,8 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .stat-degraded .ic { color: var(--warn); background: var(--warn-soft); }
 .stat-offline .ic { color: var(--bad); background: var(--bad-soft); }
 .stat-uptime .ic { color: var(--accent); background: var(--accent-soft); }
-.stat-value { display: block; font-size: 1.35rem; font-weight: 800; line-height: 1.2; }
+.stat-value { display: block; font-size: 1.35rem; font-weight: 800; line-height: 1.2; font-variant-numeric: tabular-nums; }
+time, .num, .metrics dd, .m-stat b { font-variant-numeric: tabular-nums; }
 .stat-label { display: block; color: var(--muted); font-size: 12.5px; }
 @media (min-width: 700px) { .summary { grid-template-columns: repeat(4, 1fr); } }
 .updated { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin: 12px 2px 14px; }

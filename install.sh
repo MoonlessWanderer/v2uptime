@@ -832,7 +832,7 @@ backup_menu() {
   case "$(ask "Choice" "0")" in
     1) mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
        local name
-       name="$BACKUP_DIR/v2uptime-$(date +%Y%m%d-%H%M%S)"
+       name="$BACKUP_DIR/v2uptime-$(date -u +%Y%m%dT%H%M%SZ)"
        app_cmd backup-db -o "/tmp/v2uptime-backup.db" >/dev/null
        mv /tmp/v2uptime-backup.db "$name.db"
        cp -a "$INSTALL_DIR/config.py" "$name.config.py"

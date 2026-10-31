@@ -1,7 +1,8 @@
-"""Time helpers: UTC epoch storage, local/Jalali display, Persian digits.
+"""Time helpers: UTC epoch storage, Gregorian display, Latin digits.
 
 Every timestamp in the database is an integer Unix epoch (seconds, UTC).
-Conversion to the display timezone happens only when rendering.
+Conversion to the display timezone happens only when rendering. Hours are
+24-hour; empty values render as an em dash.
 """
 
 from __future__ import annotations
@@ -12,31 +13,13 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import jdatetime
-
-FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
-JALALI_MONTHS = (
-    "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
-    "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند",
-)
-GREGORIAN_MONTHS = (
-    "ژانویه", "فوریه", "مارس", "آوریل", "مه", "ژوئن",
-    "ژوئیه", "اوت", "سپتامبر", "اکتبر", "نوامبر", "دسامبر",
-)
-# Python weekday() order: Monday=0 ... Sunday=6
-WEEKDAYS_FA = ("دوشنبه", "سه‌شنبه", "چهارشنبه", "پنجشنبه", "جمعه", "شنبه", "یکشنبه")
-
 HOUR = 3600
 DAY = 86400
+_EMPTY = "—"
 
 
 def now_ts() -> int:
     return int(time.time())
-
-
-def fa(value: object) -> str:
-    """Convert ASCII digits to Persian digits."""
-    return str(value).translate(FA_DIGITS)
 
 
 def hour_floor(ts: int) -> int:
@@ -82,71 +65,101 @@ def utc_offset(ts: int, tz_name: str) -> int:
     return int(offset.total_seconds()) if offset else 0
 
 
-def fmt_datetime(ts: int | None, tz_name: str, jalali: bool = True, seconds: bool = False) -> str:
+def tz_offset(tz_name: str, ts: int | None = None) -> str:
+    """Offset as ``+03:30`` or ``-05:00`` at ``ts`` (or now)."""
+    seconds = utc_offset(now_ts() if ts is None else ts, tz_name)
+    sign = "+" if seconds >= 0 else "-"
+    minutes, _sec = divmod(abs(seconds), 60)
+    hours, mins = divmod(minutes, 60)
+    return f"{sign}{hours:02d}:{mins:02d}"
+
+
+def tz_label(tz_name: str, ts: int | None = None) -> str:
+    """Offset label such as ``UTC+03:30``."""
+    return "UTC" + tz_offset(tz_name, ts)
+
+
+def iso_utc(ts: int | None) -> str:
+    """RFC 3339 UTC timestamp with a ``Z`` suffix, or an em dash when empty."""
     if ts is None:
-        return "—"
-    local = to_local(ts, tz_name)
-    clock = local.strftime("%H:%M:%S" if seconds else "%H:%M")
-    if jalali:
-        j = jdatetime.date.fromgregorian(date=local.date())
-        return fa(f"{j.year:04d}/{j.month:02d}/{j.day:02d} {clock}")
-    return fa(f"{local:%Y-%m-%d} {clock}")
+        return _EMPTY
+    return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def fmt_date_long(ts: int, tz_name: str, jalali: bool = True) -> str:
-    local = to_local(ts, tz_name)
-    if jalali:
-        j = jdatetime.date.fromgregorian(date=local.date())
-        return fa(f"{j.day} {JALALI_MONTHS[j.month - 1]} {j.year}")
-    return fa(f"{local.day} {GREGORIAN_MONTHS[local.month - 1]} {local.year}")
+def fmt_datetime(ts: int | None, tz_name: str, seconds: bool = False) -> str:
+    if ts is None:
+        return _EMPTY
+    local = to_local(int(ts), tz_name)
+    clock = "%H:%M:%S" if seconds else "%H:%M"
+    return local.strftime(f"%Y-%m-%d {clock}")
 
 
-def fmt_time(ts: int, tz_name: str) -> str:
-    return fa(to_local(ts, tz_name).strftime("%H:%M"))
+def fmt_date(ts: int | None, tz_name: str) -> str:
+    if ts is None:
+        return _EMPTY
+    return to_local(int(ts), tz_name).strftime("%Y-%m-%d")
 
 
-def fmt_range(start: int, end: int, tz_name: str, jalali: bool = True, with_date: bool = True) -> str:
-    """Human label for a bucket, e.g. '۹ آبان ۱۴۰۵ ۱۲:۰۰ تا ۱۲:۳۰'."""
-    if not with_date:
-        return f"{fmt_date_long(start, tz_name, jalali)}"
-    end_label = fmt_time(end, tz_name)
-    return f"{fmt_date_long(start, tz_name, jalali)} {fmt_time(start, tz_name)} تا {end_label}"
+def fmt_time(ts: int | None, tz_name: str) -> str:
+    if ts is None:
+        return _EMPTY
+    return to_local(int(ts), tz_name).strftime("%H:%M")
+
+
+def fmt_range(start: int | None, end: int | None, tz_name: str) -> str:
+    """Date plus a clock range, e.g. ``2026-10-31 12:00–12:30``."""
+    if start is None or end is None:
+        return _EMPTY
+    start_text = fmt_datetime(start, tz_name)
+    if fmt_date(start, tz_name) == fmt_date(end, tz_name):
+        return f"{start_text}–{fmt_time(end, tz_name)}"
+    return f"{start_text}–{fmt_datetime(end, tz_name)}"
 
 
 def fmt_duration(seconds: int | float | None) -> str:
-    """'۲ ساعت و ۵ دقیقه' style durations."""
+    """Two largest non-zero units: ``45s``, ``1m``, ``2h 15m``, ``3d 4h``."""
     if seconds is None:
-        return "—"
-    seconds = int(max(0, seconds))
-    if seconds < 60:
-        return fa(f"{seconds} ثانیه")
-    days, rem = divmod(seconds, DAY)
+        return _EMPTY
+    total = int(max(0, seconds))
+    days, rem = divmod(total, DAY)
     hours, rem = divmod(rem, HOUR)
-    minutes = rem // 60
+    minutes, secs = divmod(rem, 60)
     parts: list[str] = []
     if days:
-        parts.append(f"{days} روز")
+        parts.append(f"{days}d")
     if hours:
-        parts.append(f"{hours} ساعت")
-    if minutes and not days:
-        parts.append(f"{minutes} دقیقه")
-    return fa(" و ".join(parts) or "۰ دقیقه")
+        parts.append(f"{hours}h")
+    if minutes:
+        parts.append(f"{minutes}m")
+    if secs or not parts:
+        parts.append(f"{secs}s")
+    return " ".join(parts[:2])
 
 
 def fmt_ago(ts: int | None, now: int | None = None) -> str:
     if ts is None:
-        return "—"
-    delta = (now or now_ts()) - ts
+        return _EMPTY
+    delta = (now if now is not None else now_ts()) - int(ts)
     if delta < 60:
-        return "لحظاتی پیش"
-    return f"{fmt_duration(delta)} پیش"
+        return "just now"
+    if delta < HOUR:
+        return f"{delta // 60}m ago"
+    if delta < DAY:
+        return f"{delta // HOUR}h ago"
+    return f"{delta // DAY}d ago"
 
 
 def fmt_percent(value: float | None, digits: int = 2) -> str:
     if value is None:
-        return "—"
+        return _EMPTY
     text = f"{value:.{digits}f}".rstrip("0").rstrip(".") if digits else f"{value:.0f}"
-    return fa(f"{text}٪")
+    return f"{text}%"
+
+
+def fmt_ms(value: float | int | None) -> str:
+    if value is None:
+        return _EMPTY
+    return f"{int(round(value))} ms"
 
 
 def ceil_div(a: int, b: int) -> int:

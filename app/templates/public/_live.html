@@ -2,15 +2,15 @@
 <section class="summary" aria-label="خلاصه وضعیت">
   <div class="stat stat-online">
     <svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>
-    <div><span class="stat-value">{{ data.summary.online|fa }}</span><span class="stat-label">آنلاین</span></div>
+    <div><span class="stat-value">{{ data.summary.online }}</span><span class="stat-label">آنلاین</span></div>
   </div>
   <div class="stat stat-degraded">
     <svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>
-    <div><span class="stat-value">{{ data.summary.degraded|fa }}</span><span class="stat-label">ناپایدار</span></div>
+    <div><span class="stat-value">{{ data.summary.degraded }}</span><span class="stat-label">ناپایدار</span></div>
   </div>
   <div class="stat stat-offline">
     <svg class="ic" aria-hidden="true"><use href="#i-x"/></svg>
-    <div><span class="stat-value">{{ data.summary.offline|fa }}</span><span class="stat-label">قطع</span></div>
+    <div><span class="stat-value">{{ data.summary.offline }}</span><span class="stat-label">قطع</span></div>
   </div>
   <div class="stat stat-uptime">
     <svg class="ic" aria-hidden="true"><use href="#i-gauge"/></svg>
@@ -19,8 +19,8 @@
 </section>
 <p class="updated" data-generated="{{ data.generated_at }}">
   <svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>
-  آخرین تست: {{ data.last_check_label or "—" }}
-  <span class="sep">·</span> {{ data.summary.total|fa }} سرور
+  آخرین تست: {{ data.last_check_at|time_tag }}
+  <span class="sep">·</span> {{ data.summary.total }} سرور
 </p>
 <script type="application/json" id="bucket-labels">{{ data.buckets|map(attribute="label")|list|tojson }}</script>
 {% if data.servers %}

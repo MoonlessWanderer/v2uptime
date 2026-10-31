@@ -5,9 +5,23 @@
 (function () {
   "use strict";
 
-  var FA = "۰۱۲۳۴۵۶۷۸۹";
-  function fa(text) { return String(text).replace(/\d/g, function (d) { return FA[d]; }); }
   function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function axisText(cfg, index) {
+    var iso = cfg.times && cfg.times[index];
+    if (iso && window.UptimeTime) {
+      return (cfg.range === "7d" || cfg.range === "30d")
+        ? window.UptimeTime.formatMonthDay(iso)
+        : window.UptimeTime.formatTime(iso);
+    }
+    return (cfg.labels && cfg.labels[index]) || "";
+  }
+
+  function tipTime(cfg, index) {
+    var iso = cfg.times && cfg.times[index];
+    if (iso && window.UptimeTime) return window.UptimeTime.formatDateTime(iso);
+    return (cfg.labels && cfg.labels[index]) || "";
+  }
 
   function niceMax(value) {
     if (!(value > 0)) return 1;
@@ -95,16 +109,15 @@
     for (var g = 0; g <= 4; g++) {
       var gv = this.yMax * g / 4, gy = this.yAt(gv);
       ctx.beginPath(); ctx.moveTo(this.pad.l, gy); ctx.lineTo(this.w - this.pad.r, gy); ctx.stroke();
-      ctx.fillText(fa(Math.round(gv)), this.pad.l - 6, gy);
+      ctx.fillText(String(Math.round(gv)), this.pad.l - 6, gy);
     }
-    // x labels (first / middle / last)
-    var labels = cfg.labels || [];
+    // x labels (first / middle / last): 24h is HH:mm, longer ranges are MMM DD
     ctx.textBaseline = "top";
     [0, Math.floor((values.length - 1) / 2), values.length - 1].forEach(function (i, k) {
-      if (i < 0 || !labels[i]) return;
+      if (i < 0) return;
+      var text = axisText(cfg, i);
+      if (!text) return;
       ctx.textAlign = k === 0 ? "left" : k === 2 ? "right" : "center";
-      // labels look like "1404/08/09 12:30": show the time, or "08/09" for multi-day ranges
-      var text = cfg.xDate ? labels[i].split(" ")[0].split("/").slice(-2).join("/") : labels[i].split(" ").slice(-1)[0];
       ctx.fillText(text, this.xAt(i), this.h - this.pad.b + 6);
     }, this);
 
@@ -155,8 +168,8 @@
       if (cfg.type !== "bar" && hv !== null && hv !== undefined) {
         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(hx, this.yAt(hv), 3.5, 0, Math.PI * 2); ctx.fill();
       }
-      var line1 = labels[this.hover] || "";
-      var line2 = hv === null || hv === undefined ? "بدون داده" : fa((cfg.unit === "%" ? hv.toFixed(2).replace(/\.?0+$/, "") : Math.round(hv)) + " " + (cfg.unit || ""));
+      var line1 = tipTime(cfg, this.hover);
+      var line2 = hv === null || hv === undefined ? "بدون داده" : (cfg.unit === "%" ? hv.toFixed(2).replace(/\.?0+$/, "") : Math.round(hv)) + " " + (cfg.unit || "");
       ctx.font = "12px Vazirmatn, Tahoma, sans-serif";
       var tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 16;
       var tx = Math.min(Math.max(hx - tw / 2, 2), this.w - tw - 2);
@@ -176,7 +189,6 @@
       if (canvas._chart) canvas._chart.destroy();
       canvas._chart = new Chart(canvas, cfg);
       return canvas._chart;
-    },
-    fa: fa
+    }
   };
 })();

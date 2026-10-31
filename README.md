@@ -110,6 +110,8 @@ pytest                                       # تست‌ها
 - `GET /api/servers/{id}/history?range=24h|7d|30d` — نمودار latency/uptime، خلاصه بازه و قطعی‌ها
 - `GET /healthz` — سلامت سرویس
 
+Timestamps in API payloads are RFC 3339 UTC (`2026-10-31T14:58:00Z`), not Unix epochs. `*_label` fields are Gregorian, 24-hour, with Latin digits (`2026-10-31 18:28`). `range_label` is `24h`, `7d`, or `30d`. Every status and history payload includes `timezone`: `{"name": "Asia/Tehran", "offset": "+03:30"}`. Each server in `/api/status` has `last_incident` (`started_at`, `ended_at` or `null`, `duration_seconds`) or `null` when there was no incident in the last 30 days. History incidents include `started_at` and `ended_at` (ISO, or `null` while ongoing) in addition to the labels. A missing server returns `404` with `{"detail": "Server not found"}`. The `use_jalali` setting has been removed.
+
 پاسخ‌ها حداکثر ۶۰ ثانیه کش می‌شوند و بعد از هر چرخه تست تازه می‌شوند.
 
 ## تعریف‌ها و فرمول‌ها
@@ -137,7 +139,7 @@ pytest                                       # تست‌ها
 
 ## ذخیره‌سازی
 
-- همه زمان‌ها در دیتابیس به‌صورت Unix epoch (UTC)؛ نمایش در منطقه زمانی تنظیم‌شده (`Asia/Tehran`) با تاریخ شمسی.
+- همه زمان‌ها در دیتابیس به‌صورت Unix epoch (UTC)؛ نمایش میلادی، ۲۴ ساعته، با ارقام لاتین، در منطقه زمانی تنظیم‌شده (`Asia/Tehran`). لاگ JSON فیلد `ts` را به صورت UTC با میلی‌ثانیه می‌نویسد (`2026-10-31T14:58:05.123Z`).
 - دیتای خام ۴۸ ساعت (قابل تنظیم، حداقل ۲۶)، دیتای ساعتی ۹۰ روز. تجمیع ساعتی idempotent است و ساعت‌های عقب‌افتاده را بعد از خاموشی جبران می‌کند. ۲۴ ساعت از دیتای خام، ۷ و ۳۰ روز از جدول ساعتی به‌علاوه دیتای خامِ هنوز تجمیع‌نشده محاسبه می‌شود.
 - SQLite در حالت WAL با `busy_timeout`؛ نتایج هر چرخه در یک تراکنش batch ذخیره می‌شوند.
 

@@ -26,8 +26,8 @@ TELEGRAM_EVENTS: tuple[tuple[str, str], ...] = (
 )
 
 WEEKDAY_CHOICES: tuple[tuple[str, str], ...] = (
-    ("5", "شنبه"), ("6", "یکشنبه"), ("0", "دوشنبه"), ("1", "سه‌شنبه"),
-    ("2", "چهارشنبه"), ("3", "پنجشنبه"), ("4", "جمعه"),
+    ("5", "Saturday"), ("6", "Sunday"), ("0", "Monday"), ("1", "Tuesday"),
+    ("2", "Wednesday"), ("3", "Thursday"), ("4", "Friday"),
 )
 
 RESERVED_PREFIXES = ("/api", "/static", "/internal", "/partials", "/healthz", "/__")
@@ -66,7 +66,6 @@ DEFINITIONS: tuple[SettingDef, ...] = (
     SettingDef("test_location", "تهران - مخابرات", "str", "محل انجام تست", "general",
                "در صفحه عمومی نمایش داده می‌شود."),
     SettingDef("timezone", "Asia/Tehran", "tz", "منطقه زمانی نمایش", "general"),
-    SettingDef("use_jalali", True, "bool", "نمایش تاریخ شمسی", "general"),
     SettingDef("admin_path", "/admin", "path", "مسیر پنل ادمین", "general",
                "مثلاً /admin-x7k2 — بعد از ذخیره، پنل فقط از مسیر جدید باز می‌شود."),
     # --- checks
@@ -271,10 +270,6 @@ class SettingsStore:
     @property
     def tz(self) -> str:
         return self.get("timezone")
-
-    @property
-    def jalali(self) -> bool:
-        return self.get("use_jalali")
 
     def chat_ids(self) -> list[str]:
         return [c for c in self.get("telegram_chat_ids").split(",") if c]

@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup, escape
 
 from app import __version__
 from app.services.checker import error_label
 from app.services.parser import flag_emoji
 from app.services.settings import settings
 from app.services.status import STATUS_LABELS
-from app.timeutil import fa, fmt_ago, fmt_datetime, fmt_duration, fmt_percent
+from app.timeutil import fmt_ago, fmt_datetime, fmt_duration, fmt_ms, fmt_percent, fmt_time, iso_utc, tz_label
 
 APP_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = APP_DIR / "templates"
@@ -60,20 +62,49 @@ def sparkline(values: Iterable[int | None], width: int = 240, height: int = 36) 
     return {"segments": segments, "fails": fails, "width": width, "height": height}
 
 
-def _fmt_dt(ts: int | None, seconds: bool = False) -> str:
-    return fmt_datetime(ts, settings.tz, settings.jalali, seconds=seconds)
+def _coerce_ts(value: Any) -> int | None:
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or text == "—":
+            return None
+        if text.endswith("Z") and "T" in text:
+            return int(datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp())
+        if text.lstrip("-").isdigit():
+            return int(text)
+    return None
 
 
-def _fmt_ms(value: float | int | None) -> str:
-    return "—" if value is None else fa(f"{int(round(value))}")
+def time_tag(value: Any, kind: str = "time") -> Markup | str:
+    """`<time datetime="…Z" title="YYYY-MM-DD HH:mm:ss UTC+00:00">…</time>`."""
+    ts = _coerce_ts(value)
+    if ts is None:
+        return "—"
+    zone = settings.tz
+    title = f"{fmt_datetime(ts, zone, seconds=True)} {tz_label(zone, ts)}"
+    if kind == "datetime":
+        visible = fmt_datetime(ts, zone)
+    elif kind == "seconds":
+        visible = fmt_datetime(ts, zone, seconds=True)
+    elif kind == "ago":
+        visible = fmt_ago(ts)
+    else:
+        visible = fmt_time(ts, zone)
+    ago = " data-ago" if kind == "ago" else ""
+    return Markup(
+        f'<time datetime="{escape(iso_utc(ts))}" title="{escape(title)}"{ago}>{escape(visible)}</time>'
+    )
 
 
 templates.env.globals.update(
     admin_url=admin_url, static_url=static_url, settings=settings, version=__version__, sparkline=sparkline,
-    flag_emoji=flag_emoji,
+    flag_emoji=flag_emoji, tz_label=tz_label,
 )
 templates.env.filters.update(
-    fa=fa, dt=_fmt_dt, duration=fmt_duration, percent=fmt_percent, ago=fmt_ago, ms=_fmt_ms,
+    time_tag=time_tag, duration=fmt_duration, percent=fmt_percent, ago=fmt_ago, ms=fmt_ms,
     error_label=error_label, status_label=lambda s: STATUS_LABELS.get(s, s),
 )
 

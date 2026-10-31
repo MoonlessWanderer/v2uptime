@@ -4,8 +4,6 @@
 
   var csrf = (document.querySelector('meta[name="csrf-token"]') || {}).content || "";
   var base = (document.querySelector('meta[name="admin-base"]') || {}).content || "";
-  var fa = function (t) { return window.MiniChart ? window.MiniChart.fa(t) : String(t); };
-
   function post(url, body) {
     return fetch(url, {
       method: "POST",
@@ -68,7 +66,7 @@
       post(base + "/servers/" + id + "/test")
         .then(function (r) {
           out.className = "test-result pill " + (r.ok ? "pill-ok" : "pill-bad");
-          out.textContent = r.ok ? "موفق · " + fa(r.latency_ms) + " ms" : "ناموفق · " + r.error;
+          out.textContent = r.ok ? "موفق · " + r.latency_ms + " ms" : "ناموفق · " + r.error;
           if (!r.ok && r.detail) out.title = r.detail;
         })
         .catch(function () { out.textContent = "خطا"; })
@@ -153,13 +151,12 @@
       fetch(history.getAttribute("data-history") + "?range=" + range, { headers: { "Accept": "application/json" } })
         .then(function (r) { return r.json(); })
         .then(function (data) {
-          var labels = data.points.map(function (p) { return p.label; });
-          var xDate = range !== "24h";
+          var times = data.points.map(function (p) { return p.t; });
           MiniChart.render(history.querySelector('[data-chart="latency"]'), {
-            type: "line", values: data.points.map(function (p) { return p.latency; }), labels: labels, unit: "ms", xDate: xDate
+            type: "line", values: data.points.map(function (p) { return p.latency; }), times: times, range: range, unit: "ms"
           });
           MiniChart.render(history.querySelector('[data-chart="uptime"]'), {
-            type: "bar", values: data.points.map(function (p) { return p.uptime; }), labels: labels, unit: "%", yMax: 100, xDate: xDate
+            type: "bar", values: data.points.map(function (p) { return p.uptime; }), times: times, range: range, unit: "%", yMax: 100
           });
         });
     };

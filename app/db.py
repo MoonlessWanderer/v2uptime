@@ -42,7 +42,17 @@ def init_db(path: str | Path) -> SqliteDatabase:
     database.connect(reuse_if_open=True)
     database.create_tables(ALL_MODELS, safe=True)
     _add_missing_columns(database, ALL_MODELS)
+    _drop_retired_settings()
     return database
+
+
+def _drop_retired_settings() -> None:
+    """Forget settings this version no longer reads. Unknown keys are ignored."""
+    from app.models import Setting
+
+    removed = Setting.delete().where(Setting.key == "use_jalali").execute()
+    if removed:
+        log.info("migration: removed retired setting", extra={"key": "use_jalali"})
 
 
 def _add_missing_columns(database: SqliteDatabase, models: list[type]) -> None:

@@ -20,9 +20,9 @@
       <dt>SOCKS محلی</dt><dd class="ltr">{% if port %}socks5h://127.0.0.1:{{ port }}{% else %}بارگذاری نشده{% endif %}</dd>
       <dt>عمومی</dt><dd>{{ 'بله' if server.is_public else 'خیر (مخفی)' }}</dd>
       {% if metrics %}
-      <dt>پینگ فعلی / میانه ۱ ساعت</dt><dd>{{ metrics.latency_ms|ms }} / {{ metrics.median_1h|ms }} ms</dd>
+      <dt>پینگ فعلی / میانه ۱ ساعت</dt><dd>{{ metrics.latency_ms|ms }} / {{ metrics.median_1h|ms }}</dd>
       <dt>آپتایم ۲۴h / ۷d / ۳۰d</dt><dd>{{ metrics.uptime_24h|percent }} / {{ metrics.uptime_7d|percent }} / {{ metrics.uptime_30d|percent }}</dd>
-      <dt>Jitter / امتیاز پایداری</dt><dd>{{ metrics.jitter_24h|ms }} ms / {{ metrics.stability|fa if metrics.stability is not none else '—' }}</dd>
+      <dt>Jitter / امتیاز پایداری</dt><dd>{{ metrics.jitter_24h|ms }} / {{ metrics.stability if metrics.stability is not none else '—' }}</dd>
       {% endif %}
       {% if server.xray_error %}<dt>خطای Xray</dt><dd><code>{{ server.xray_error }}</code></dd>{% endif %}
     </dl>
@@ -32,7 +32,7 @@
     <div class="table-wrap"><table class="table">
       <thead><tr><th>بازه</th><th class="num">تعداد</th><th class="num">مجموع</th><th class="num">MTTR</th><th class="num">طولانی‌ترین</th></tr></thead>
       <tbody>{% for key in ranges %}{% set st = stats[key] %}
-        <tr><td>{{ key }}</td><td class="num">{{ (st.count if st else 0)|fa }}</td>
+        <tr><td>{{ key }}</td><td class="num">{{ (st.count if st else 0) }}</td>
           <td class="num">{{ st.downtime|duration if st else '—' }}</td>
           <td class="num">{{ st.mttr|duration if st and st.mttr is not none else '—' }}</td>
           <td class="num">{{ st.longest|duration if st else '—' }}</td></tr>
@@ -59,7 +59,7 @@
     <div class="table-wrap"><table class="table">
       <thead><tr><th>زمان</th><th>نتیجه</th><th class="num">پینگ</th><th>خطا</th></tr></thead>
       <tbody>{% for c in checks %}
-        <tr><td>{{ c.checked_at|dt(true) }}</td>
+        <tr><td>{{ c.checked_at|time_tag("seconds") }}</td>
           <td>{% if c.status == 'ok' %}<span class="pill pill-ok">موفق</span>{% elif c.status == 'fail' %}<span class="pill pill-bad">ناموفق</span>{% else %}<span class="pill">نامشخص</span>{% endif %}</td>
           <td class="num">{{ c.latency_ms|ms }}</td>
           <td>{% if c.error_type %}{{ c.error_type|error_label }}{% if c.error_detail %}<br><small class="muted ltr">{{ c.error_detail[:160] }}</small>{% endif %}{% endif %}</td></tr>
@@ -71,7 +71,7 @@
     <div class="table-wrap"><table class="table">
       <thead><tr><th>شروع</th><th>پایان</th><th class="num">مدت</th><th>علت</th></tr></thead>
       <tbody>{% for i in incidents %}
-        <tr><td>{{ i.started_at|dt }}</td><td>{{ i.ended_at|dt if i.ended_at else 'ادامه دارد' }}</td>
+        <tr><td>{{ i.started_at|time_tag("datetime") }}</td><td>{{ i.ended_at|time_tag("datetime") if i.ended_at else 'ادامه دارد' }}</td>
           <td class="num">{{ ((i.ended_at or now) - i.started_at)|duration }}</td><td>{{ i.error_type|error_label }}</td></tr>
       {% else %}<tr><td colspan="4" class="muted">قطعی‌ای ثبت نشده است.</td></tr>{% endfor %}</tbody>
     </table></div>

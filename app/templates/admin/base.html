@@ -41,9 +41,11 @@
       {% block content %}{% endblock %}
     </main>
   </div>
+  <footer class="site-footer">Times are shown in {{ tz_label(settings.tz) }} ({{ settings.tz }})</footer>
 </div>
 {% endblock %}
 {% block scripts %}
+<script src="{{ static_url('js/time.js') }}" defer></script>
 <script src="{{ static_url('js/chart.js') }}" defer></script>
 <script src="{{ static_url('js/admin.js') }}" defer></script>
 {% endblock %}

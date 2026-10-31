@@ -68,16 +68,26 @@ def test_public_page_and_api_hide_sensitive_data(client, seeded):
     assert [s["name"] for s in data["servers"]] == ["Visible <A&B>"]
     assert len(data["servers"][0]["bars"]) == 42 and len(data["buckets"]) == 42
     assert "secret-host" not in str(data)
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", data["generated_at"])
+    assert data["range_label"] == "7d"
+    assert data["timezone"]["name"] == "Asia/Tehran" and data["timezone"]["offset"] == "+03:30"
+    assert data["buckets"][0]["start"].endswith("Z")
+    assert data["servers"][0]["last_incident"] is None
     fragment = client.get("/partials/live?range=30d")
     assert fragment.status_code == 200 and 'data-range="30d"' in fragment.text
 
 
 def test_history_404_for_hidden_and_inactive(client, seeded):
     visible, hidden, inactive = seeded
-    assert client.get(f"/api/servers/{visible.id}/history?range=24h").status_code == 200
+    history = client.get(f"/api/servers/{visible.id}/history?range=24h")
+    assert history.status_code == 200
+    body = history.json()
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", body["points"][0]["t"])
+    assert body["range_label"] == "24h" and body["timezone"]["offset"] == "+03:30"
     assert client.get(f"/api/servers/{hidden.id}/history").status_code == 404
     assert client.get(f"/api/servers/{inactive.id}/history").status_code == 404
-    assert client.get("/api/servers/9999/history").status_code == 404
+    missing = client.get("/api/servers/9999/history")
+    assert missing.status_code == 404 and missing.json()["detail"] == "Server not found"
 
 
 def test_security_headers(client):

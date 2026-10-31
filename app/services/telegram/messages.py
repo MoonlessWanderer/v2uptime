@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from app.services.checker import error_label
 from app.services.settings import settings
 from app.services.status import STATUS_EMOJI, STATUS_LABELS
-from app.timeutil import fa, fmt_datetime, fmt_duration, fmt_percent
+from app.timeutil import fmt_datetime, fmt_duration, fmt_ms, fmt_percent
 
 MAX_LEN = 4096
 SAFE_LEN = 4000  # margin under Telegram's 4096 limit
@@ -26,11 +26,11 @@ def e(value: object) -> str:
 
 
 def t(ts: int | None) -> str:
-    return fmt_datetime(ts, settings.tz, settings.jalali)
+    return fmt_datetime(ts, settings.tz)
 
 
 def ms(value: float | None) -> str:
-    return "—" if value is None else fa(f"{int(round(value))} ms")
+    return fmt_ms(value)
 
 
 def strip_tags(text: str) -> str:
@@ -91,7 +91,7 @@ def server_up(name: str, started_at: int, ended_at: int, duration: int | None) -
 def flapping(name: str, count: int, window_minutes: int, at: int) -> str:
     return (f"⚠️ <b>نوسان (Flapping)</b>\n\n"
             f"🖥 سرور: <b>{e(name)}</b>\n"
-            f"در {fa(window_minutes)} دقیقه اخیر {fa(count)} بار قطع و وصل شده است.\n"
+            f"در {window_minutes} دقیقه اخیر {count} بار قطع و وصل شده است.\n"
             f"🕒 زمان: {t(at)}\n\n"
             f"تا پایدار شدن وضعیت، پیام قطع/وصل این سرور ارسال نمی‌شود.")
 
@@ -106,7 +106,7 @@ def flap_end(name: str, in_incident: bool, at: int) -> str:
 
 def network_down(at: int, servers: int) -> str:
     return (f"🚨 <b>قطعی شبکه سرور مانیتور</b>\n\n"
-            f"همه {fa(servers)} سرور و چک مرجع داخلی هم‌زمان ناموفق بودند؛ اینترنت خود سرور مانیتور قطع است.\n"
+            f"همه {servers} سرور و چک مرجع داخلی هم‌زمان ناموفق بودند؛ اینترنت خود سرور مانیتور قطع است.\n"
             f"🕒 شروع: {t(at)}\n\n"
             f"نتایج این بازه در آمار آپتایم حساب نمی‌شوند.")
 
@@ -132,7 +132,7 @@ def xray_restarted(at: int, version: str | None) -> str:
 def panel_started(at: int, version: str, servers: int) -> str:
     return (f"⚙️ <b>پنل مانیتورینگ شروع به کار کرد</b>\n\n"
             f"نسخه پنل: {e(version)}\n"
-            f"تعداد سرورهای فعال: {fa(servers)}\n"
+            f"تعداد سرورهای فعال: {servers}\n"
             f"🕒 {t(at)}")
 
 
@@ -173,7 +173,7 @@ def report(title: str, period_label: str, rows: list[ReportRow], fastest: tuple[
         parts.append(
             f"🖥 <b>{e(row.name)}</b>\n"
             f"   آپتایم: {fmt_percent(row.uptime)} · پینگ: {ms(row.avg_latency)}\n"
-            f"   قطعی: {fa(row.incidents)} بار ({fmt_duration(row.downtime) if row.incidents else '۰'})"
+            f"   قطعی: {row.incidents} بار ({fmt_duration(row.downtime) if row.incidents else '0'})"
         )
     if not parts:
         parts.append("هیچ سرور فعالی وجود ندارد.")
@@ -181,7 +181,7 @@ def report(title: str, period_label: str, rows: list[ReportRow], fastest: tuple[
     if fastest:
         footer.append(f"⚡️ سریع‌ترین: <b>{e(fastest[0])}</b> ({ms(fastest[1])})")
     if stable:
-        footer.append(f"🛡 پایدارترین: <b>{e(stable[0])}</b> (امتیاز {fa(stable[1])})")
+        footer.append(f"🛡 پایدارترین: <b>{e(stable[0])}</b> (امتیاز {stable[1]})")
     if footer:
         parts.append("\n".join(footer))
     return split_message(parts, header, separator="\n\n")
@@ -216,4 +216,4 @@ def help_text() -> str:
 
 
 def merged_header(count: int) -> str:
-    return f"📦 <b>خلاصه {fa(count)} پیام عقب‌افتاده</b>\n\n"
+    return f"📦 <b>خلاصه {count} پیام عقب‌افتاده</b>\n\n"

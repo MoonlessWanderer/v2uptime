@@ -37,7 +37,7 @@ async def api_status(request: Request, range: str | None = None):
 @router.get("/api/servers/{server_id}/history")
 async def api_history(request: Request, server_id: int, range: str | None = None):
     if not await run_db(_is_public, server_id):
-        raise HTTPException(status_code=404, detail="سرور پیدا نشد")
+        raise HTTPException(status_code=404, detail="Server not found")
     data = await run_db(request.app.state.services.stats.server_history, server_id, _range(range))
     return JSONResponse(data, headers={"Cache-Control": "public, max-age=30"})
 

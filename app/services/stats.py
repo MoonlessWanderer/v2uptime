@@ -46,18 +46,20 @@ from app.timeutil import (
     DAY,
     HOUR,
     add_local_days,
-    fmt_date_long,
+    fmt_date,
     fmt_datetime,
     fmt_duration,
     fmt_range,
     hour_floor,
+    iso_utc,
     local_midnight,
     now_ts,
+    tz_offset,
     utc_offset,
 )
 
 RANGES: dict[str, int] = {"24h": DAY, "7d": 7 * DAY, "30d": 30 * DAY}
-RANGE_LABELS = {"24h": "۲۴ ساعت", "7d": "۷ روز", "30d": "۳۰ روز"}
+RANGE_LABELS = {"24h": "24h", "7d": "7d", "30d": "30d"}
 BAR_SPEC: dict[str, tuple[int, int]] = {"24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY)}
 HISTORY_STEP: dict[str, int] = {"24h": 300, "7d": HOUR, "30d": 6 * HOUR}
 MIN_CHECKS_FOR_RANKING = 10
@@ -418,7 +420,7 @@ class StatsService:
 
     def _compute_public_status(self, range_key: str) -> dict[str, Any]:
         now = now_ts()
-        tz, jalali = settings.tz, settings.jalali
+        tz = settings.tz
         servers = list(Server.select().where(Server.is_active == True, Server.is_public == True)  # noqa: E712
                        .order_by(Server.sort_order, Server.id))
         metrics = self.server_metrics()
@@ -427,9 +429,12 @@ class StatsService:
         incident_starts: dict[int, list[int]] = {}
         for inc in incidents_overlapping(buckets[0].start, now):
             incident_starts.setdefault(inc.server_id, []).append(inc.started_at)
+        last_by_server: dict[int, Incident] = {}
+        for inc in incidents_overlapping(now - 30 * DAY, now):
+            last_by_server.setdefault(inc.server_id, inc)
         bucket_info = [{
-            "start": b.start, "end": b.end,
-            "label": fmt_date_long(b.start, tz, jalali) if range_key == "30d" else fmt_range(b.start, b.end, tz, jalali),
+            "start": iso_utc(b.start), "end": iso_utc(b.end),
+            "label": fmt_date(b.start, tz) if range_key == "30d" else fmt_range(b.start, b.end, tz),
         } for b in buckets]
         cards = []
         for server in servers:
@@ -451,20 +456,22 @@ class StatsService:
                 "uptime_7d": _round(m.uptime_7d, 2), "uptime_30d": _round(m.uptime_30d, 2),
                 "median_1h": _round(m.median_1h, 0), "avg_1h": _round(m.avg_1h, 0),
                 "stability": m.stability, "collecting": m.collecting,
-                "last_check_at": m.last_check_at,
-                "last_check_label": fmt_datetime(m.last_check_at, tz, jalali) if m.last_check_at else None,
+                "last_check_at": iso_utc(m.last_check_at) if m.last_check_at else None,
+                "last_check_label": fmt_datetime(m.last_check_at, tz) if m.last_check_at else None,
+                "last_incident": _last_incident(last_by_server.get(server.id), now),
                 "bars": bucket_items, "spark": spark,
             })
         public_metrics = [metrics[c["id"]] for c in cards if c["id"] in metrics]
         uptimes = [c["uptime_24h"] for c in cards if c["uptime_24h"] is not None]
         last_check = self.live.last_check_ts()
         return {
-            "generated_at": now,
-            "generated_at_label": fmt_datetime(now, tz, jalali),
-            "last_check_at": last_check,
-            "last_check_label": fmt_datetime(last_check, tz, jalali) if last_check else None,
+            "generated_at": iso_utc(now),
+            "generated_at_label": fmt_datetime(now, tz),
+            "last_check_at": iso_utc(last_check) if last_check else None,
+            "last_check_label": fmt_datetime(last_check, tz) if last_check else None,
             "range": range_key,
-            "range_label": RANGE_LABELS[range_key],
+            "range_label": range_key,
+            "timezone": {"name": tz, "offset": tz_offset(tz, now)},
             "buckets": bucket_info,
             "site": {
                 "title": settings.get("site_title"), "description": settings.get("site_description"),
@@ -490,7 +497,7 @@ class StatsService:
 
     def _compute_history(self, server_id: int, range_key: str) -> dict[str, Any]:
         now = now_ts()
-        tz, jalali = settings.tz, settings.jalali
+        tz = settings.tz
         server = Server.get_by_id(server_id)
         step = HISTORY_STEP[range_key]
         buckets = fixed_buckets(now, step, RANGES[range_key] // step, tz)
@@ -503,7 +510,7 @@ class StatsService:
             rows = series_rows(buckets[0].start, server_id)
         series = bucketize(buckets, rows).get(server_id) or [Counts() for _ in buckets]
         points = [{
-            "t": b.start, "label": fmt_datetime(b.start, tz, jalali),
+            "t": iso_utc(b.start), "label": fmt_datetime(b.start, tz),
             "latency": _round(c.avg_latency, 0), "uptime": _round(c.uptime, 2), "checks": c.valid,
         } for b, c in zip(buckets, series)]
 
@@ -526,7 +533,8 @@ class StatsService:
                 "latency_ms": m.latency_ms, "median_1h": _round(m.median_1h, 0), "stability": m.stability,
             },
             "range": range_key,
-            "range_label": RANGE_LABELS[range_key],
+            "range_label": range_key,
+            "timezone": {"name": tz, "offset": tz_offset(tz, now)},
             "points": points,
             "summary": {
                 "uptime": _round(total.uptime, 2), "checks": total.valid, "failures": total.fail,
@@ -539,12 +547,24 @@ class StatsService:
                 "longest_label": fmt_duration(stats.longest) if stats.count else "—",
             },
             "incidents": [{
-                "start_label": fmt_datetime(i.started_at, tz, jalali),
-                "end_label": fmt_datetime(i.ended_at, tz, jalali) if i.ended_at else None,
+                "started_at": iso_utc(i.started_at),
+                "ended_at": iso_utc(i.ended_at) if i.ended_at else None,
+                "start_label": fmt_datetime(i.started_at, tz),
+                "end_label": fmt_datetime(i.ended_at, tz) if i.ended_at else None,
                 "duration_label": fmt_duration((i.ended_at or now) - i.started_at),
                 "error_label": error_label(i.error_type), "ongoing": i.ended_at is None,
             } for i in incidents],
         }
+
+
+def _last_incident(inc: Incident | None, now: int) -> dict[str, Any] | None:
+    if inc is None:
+        return None
+    return {
+        "started_at": iso_utc(inc.started_at),
+        "ended_at": iso_utc(inc.ended_at) if inc.ended_at else None,
+        "duration_seconds": max(0, int((inc.ended_at or now) - inc.started_at)),
+    }
 
 
 def _round(value: float | None, digits: int) -> float | int | None:

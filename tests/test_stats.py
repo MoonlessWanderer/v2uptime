@@ -151,3 +151,7 @@ def test_history_payload(database):
     assert history["summary"]["uptime"] == 60.0
     assert history["incident_stats"]["count"] == 1
     assert history["incidents"][0]["ongoing"] is False
+    assert history["incidents"][0]["started_at"].endswith("Z")
+    assert history["incidents"][0]["ended_at"].endswith("Z")
+    assert history["points"][0]["t"].endswith("Z")
+    assert history["range_label"] == "24h"

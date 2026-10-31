@@ -11,6 +11,7 @@ import logging
 import logging.handlers
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 _STANDARD_ATTRS = set(vars(logging.makeLogRecord({}))) | {"message", "asctime"}
@@ -39,8 +40,10 @@ class RedactFilter(logging.Filter):
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
+        moment = datetime.fromtimestamp(record.created, tz=timezone.utc)
+        ts = moment.strftime("%Y-%m-%dT%H:%M:%S.") + f"{moment.microsecond // 1000:03d}Z"
         data: dict[str, object] = {
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S%z"),
+            "ts": ts,
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),

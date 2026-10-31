@@ -27,10 +27,10 @@
     <section class="panel">
       <h2>وضعیت صف</h2>
       <dl class="kv">
-        <dt>در صف</dt><dd>{{ queue.pending|fa }}{% if queue.oldest_pending %} (قدیمی‌ترین: {{ queue.oldest_pending|ago }}){% endif %}</dd>
-        <dt>ارسال ۲۴ ساعت</dt><dd>{{ queue.sent_24h|fa }}</dd>
-        <dt>ناموفق دائمی</dt><dd>{{ queue.failed|fa }}</dd>
-        <dt>آخرین ارسال</dt><dd>{{ queue.last_sent_at|dt if queue.last_sent_at else '—' }}{% if queue.last_via %} · {{ queue.last_via }}{% endif %}</dd>
+        <dt>در صف</dt><dd>{{ queue.pending }}{% if queue.oldest_pending %} (قدیمی‌ترین: {{ queue.oldest_pending|time_tag("ago") }}){% endif %}</dd>
+        <dt>ارسال ۲۴ ساعت</dt><dd>{{ queue.sent_24h }}</dd>
+        <dt>ناموفق دائمی</dt><dd>{{ queue.failed }}</dd>
+        <dt>آخرین ارسال</dt><dd>{{ queue.last_sent_at|time_tag("datetime") }}{% if queue.last_via %} · {{ queue.last_via }}{% endif %}</dd>
         <dt>آخرین خطا</dt><dd>{{ queue.last_error or '—' }}</dd>
         <dt>مسیر کش‌شده</dt><dd class="ltr">{{ last_route or '—' }}</dd>
         {% if bot_error %}<dt>خطای دستورها</dt><dd>{{ bot_error }}</dd>{% endif %}

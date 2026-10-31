@@ -3,7 +3,6 @@
   "use strict";
 
   var REFRESH_MS = 60000;
-  var fa = function (t) { return window.MiniChart ? window.MiniChart.fa(t) : String(t); };
   var live = document.getElementById("live");
   var tooltip = document.getElementById("tooltip");
   var emptyFilter = document.getElementById("empty-filter");
@@ -113,9 +112,9 @@
     bar.classList.add("is-hover");
     var labels = bucketLabels();
     var u = bar.getAttribute("data-u"), n = parseInt(bar.getAttribute("data-n") || "0", 10);
-    var lines = "<strong>" + (u === "" ? "بدون داده" : fa(u) + "٪ آپتایم") + "</strong>";
+    var lines = "<strong>" + (u === "" ? "بدون داده" : u + "% آپتایم") + "</strong>";
     lines += esc(labels[+bar.getAttribute("data-i")] || "");
-    if (n > 0) lines += "<br>" + fa(n) + " قطعی";
+    if (n > 0) lines += "<br>" + n + " قطعی";
     tooltip.innerHTML = lines;
     tooltip.hidden = false;
     var r = bar.getBoundingClientRect(), t = tooltip.getBoundingClientRect();
@@ -183,8 +182,8 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
-  function pct(v) { return v === null || v === undefined ? "—" : fa(String(v)) + "٪"; }
-  function ms(v) { return v === null || v === undefined ? "—" : fa(Math.round(v)) + " ms"; }
+  function pct(v) { return v === null || v === undefined ? "—" : String(v) + "%"; }
+  function ms(v) { return v === null || v === undefined ? "—" : Math.round(v) + " ms"; }
 
   function loadHistory() {
     var id = state.modalId, range = state.modalRange;
@@ -201,23 +200,22 @@
         var stats = [
           ["آپتایم " + data.range_label, pct(sum.uptime)],
           ["میانگین پینگ", ms(sum.avg_latency)],
-          ["کمترین / بیشترین", (sum.min_latency === null ? "—" : fa(sum.min_latency) + " / " + fa(sum.max_latency)) + " ms"],
+          ["کمترین / بیشترین", (sum.min_latency === null ? "—" : sum.min_latency + " / " + sum.max_latency) + " ms"],
           ["نوسان (jitter)", ms(sum.jitter)],
-          ["تعداد قطعی", fa(inc.count)],
+          ["تعداد قطعی", String(inc.count)],
           ["مجموع قطعی", inc.downtime_label],
           ["میانگین زمان برگشت", inc.mttr_label],
-          ["امتیاز پایداری", s.stability === null ? "—" : fa(s.stability)]
+          ["امتیاز پایداری", s.stability === null ? "—" : String(s.stability)]
         ];
         document.getElementById("m-stats").innerHTML = stats.map(function (p) {
           return '<div class="m-stat"><span>' + esc(p[0]) + "</span><b>" + esc(p[1]) + "</b></div>";
         }).join("");
-        var labels = data.points.map(function (p) { return p.label; });
-        var xDate = data.range !== "24h";
+        var times = data.points.map(function (p) { return p.t; });
         window.MiniChart.render(document.getElementById("m-latency"), {
-          type: "line", values: data.points.map(function (p) { return p.latency; }), labels: labels, unit: "ms", xDate: xDate
+          type: "line", values: data.points.map(function (p) { return p.latency; }), times: times, range: data.range, unit: "ms"
         });
         window.MiniChart.render(document.getElementById("m-uptime"), {
-          type: "bar", values: data.points.map(function (p) { return p.uptime; }), labels: labels, unit: "%", yMax: 100, xDate: xDate
+          type: "bar", values: data.points.map(function (p) { return p.uptime; }), times: times, range: data.range, unit: "%", yMax: 100
         });
         var list = document.getElementById("m-incidents");
         list.innerHTML = data.incidents.length ? data.incidents.map(function (i) {

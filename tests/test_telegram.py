@@ -196,7 +196,7 @@ def test_rejected_message_fails_after_retries(tg):
 def test_messages_escape_html():
     text = messages.server_down("<b>A&B</b>", 1000, "timeout", 99.5)
     assert "&lt;b&gt;A&amp;B&lt;/b&gt;" in text and "<b>A&B</b>" not in text
-    assert "۹۹.۵٪" in text
+    assert "99.5%" in text
 
 
 def test_split_message():

@@ -21,11 +21,11 @@
   <div class="card-meta">
     <span class="chip">{{ s.protocol|upper }}</span><span class="chip">{{ s.transport }}</span>
     {% for t in s.tags %}<span class="chip chip-tag">{{ t }}</span>{% endfor %}
-    <span class="rank-chip rank-fastest" hidden>#{{ rank_fast|fa }}</span>
-    <span class="rank-chip rank-stable" hidden>{% if s.stability is not none %}امتیاز {{ s.stability|fa }}{% endif %}</span>
+    <span class="rank-chip rank-fastest" hidden>#{{ rank_fast }}</span>
+    <span class="rank-chip rank-stable" hidden>{% if s.stability is not none %}امتیاز {{ s.stability }}{% endif %}</span>
   </div>
   <dl class="metrics">
-    <div><dt>پینگ</dt><dd>{{ s.latency_ms|ms }}<small>ms</small></dd></div>
+    <div><dt>پینگ</dt><dd>{{ s.latency_ms|ms }}</dd></div>
     <div class="{{ 'is-active' if data.range == '24h' }}"><dt>۲۴ ساعت</dt><dd>{{ s.uptime_24h|percent }}</dd></div>
     <div class="{{ 'is-active' if data.range == '7d' }}"><dt>۷ روز</dt><dd>{{ s.uptime_7d|percent }}</dd></div>
     <div class="{{ 'is-active' if data.range == '30d' }}"><dt>۳۰ روز</dt><dd>{{ s.uptime_30d|percent }}</dd></div>
@@ -42,7 +42,7 @@
       {% for x in sp.fails %}<line class="spark-fail" x1="{{ x }}" x2="{{ x }}" y1="0" y2="{{ sp.height }}"/>{% endfor %}
       {% for seg in sp.segments %}<polyline points="{{ seg }}"/>{% endfor %}
     </svg>
-    <span class="spark-label">پینگ ۱ ساعت اخیر{% if s.median_1h is not none %} · میانه {{ s.median_1h|ms }}ms{% endif %}</span>
+    <span class="spark-label">پینگ ۱ ساعت اخیر{% if s.median_1h is not none %} · میانه {{ s.median_1h|ms }}{% endif %}</span>
   </div>
   {% if s.collecting %}
   <p class="collecting"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>در حال جمع‌آوری داده</p>
