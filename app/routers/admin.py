@@ -7,6 +7,7 @@ panel can move without a restart and the internal prefix is never reachable.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -33,6 +34,7 @@ from app.services import backup as backup_service
 from app.services import servers as server_service
 from app.services.checker import error_label
 from app.services.control import ControlError
+from app.services import dns as dnsdiag
 from app.services import importer
 from app.services.parser import LinkParseError
 from app.services.settings import (
@@ -290,8 +292,11 @@ async def server_detail(request: Request, server_id: int):
     if not data:
         raise HTTPException(404)
     port = svc.xray.loaded_ports().get(server_id)
+    dns_info = None
+    if not dnsdiag.is_ip(data["server"].address):
+        dns_info = await asyncio.to_thread(dnsdiag.resolve, data["server"].address)
     return page(request, "server_detail.html", admin, "servers", now=now_ts(), port=port,
-                status=svc.stats.current_status(server_id), ranges=RANGES, **data)
+                status=svc.stats.current_status(server_id), ranges=RANGES, dns=dns_info, **data)
 
 
 @router.get("/servers/{server_id}/history.json")
@@ -444,30 +449,66 @@ async def settings_page(request: Request):
     admin = await require_admin(request)
     general_main, general_adv = _partition(["general"])
     monitor_main, monitor_adv = _partition(["checks", "status", "retention"])
+    dns_fields, _dns_adv = _partition(["dns"])
     return page(request, "settings.html", admin, "settings", values=settings.all(), section="settings", tab="general",
                 general_main=general_main, general_adv=general_adv,
-                monitor_main=monitor_main, monitor_adv=monitor_adv)
+                monitor_main=monitor_main, monitor_adv=monitor_adv, dns_fields=dns_fields)
 
 
 @router.post("/settings")
 async def settings_save(request: Request):
     await require_admin(request)
     form = await checked_form(request)
-    keys = [d.key for g in ("general", "checks", "status", "retention") for d in DEFINITIONS
+    keys = [d.key for g in ("general", "checks", "status", "retention", "dns") for d in DEFINITIONS
             if d.group == g and not d.internal]
     values, errors = _collect(form, keys)
     if errors:
         for error in errors:
             flash(request, "error", error)
         return redirect("/settings")
+    svc = services(request)
+    old_dns = (settings.get("dns_primary"), settings.get("dns_secondary"), bool(settings.get("dns_ipv4_only")))
+    new_dns = (
+        values.get("dns_primary", old_dns[0]),
+        values.get("dns_secondary", old_dns[1]),
+        values.get("dns_ipv4_only", old_dns[2]),
+    )
+    if new_dns != old_dns and (new_dns[0] or new_dns[1]):
+        ok, message = await svc.xray.accepts_dns_config()
+        if not ok:
+            flash(request, "error", message)
+            return redirect("/settings")
     old_interval = settings.get("check_interval")
     await run_db(settings.set_many, values, True)
-    svc = services(request)
     svc.stats.invalidate()
     if values.get("check_interval") != old_interval:
         svc.checker.wake()
+    if new_dns != old_dns and svc.xray.installed:
+        # The dns section cannot change over the API. A full restart bumps the
+        # epoch, and the checker discards any cycle that overlapped it.
+        await svc.xray.restart("dns settings")
     flash(request, "success", "Settings saved.")
     return redirect("/settings")
+
+
+@router.post("/settings/dns-test")
+async def settings_dns_test(request: Request):
+    await require_admin(request)
+    body = await checked_json(request)
+    try:
+        primary = dnsdiag.parse_dns(str(body.get("dns_primary") or ""))
+        secondary = dnsdiag.parse_dns(str(body.get("dns_secondary") or ""))
+    except SettingError as exc:
+        return {"error": str(exc)}
+    ipv4_only = bool(body.get("dns_ipv4_only"))
+    results = []
+    for label, spec in (("Primary", primary), ("Secondary", secondary)):
+        if not spec:
+            results.append({"label": label, "skipped": True})
+            continue
+        item = await asyncio.to_thread(dnsdiag.test_one, spec, ipv4_only)
+        results.append({"label": label, **item})
+    return {"domain": dnsdiag.SAMPLE_NAME, "results": results}
 
 
 # --------------------------------------------------------------- telegram

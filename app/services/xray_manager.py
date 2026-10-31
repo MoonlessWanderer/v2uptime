@@ -27,6 +27,7 @@ from typing import Any, Callable
 from app.config import Config
 from app.db import db, run_db
 from app.models import Server
+from app.services.dns import xray_dns_options
 from app.services.xray_config import (
     XrayEntry,
     api_inbound_payload,
@@ -325,7 +326,8 @@ class XrayManager:
 
     def _write_config(self, entries: list[XrayEntry]) -> None:
         self.run_dir.mkdir(parents=True, exist_ok=True)
-        config = build_config(entries, self.cfg.xray_api_port)
+        servers, ipv4_only, _strategy = xray_dns_options()
+        config = build_config(entries, self.cfg.xray_api_port, dns_servers=servers, ipv4_only=ipv4_only)
         tmp = self.config_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, self.config_path)
@@ -457,9 +459,35 @@ class XrayManager:
             if path:
                 path.unlink(missing_ok=True)
 
+    async def accepts_dns_config(self) -> tuple[bool, str]:
+        """Whether this Xray accepts ``unexpectedIPs`` (25.6.8 or newer).
+
+        A missing binary is treated as success: the setting is stored and
+        applied the next time Xray starts. A rejected test config is not saved.
+        """
+        if not self.installed:
+            return True, ""
+        config = build_config([], self.cfg.xray_api_port, dns_servers=["127.0.0.1"])
+        self.run_dir.mkdir(parents=True, exist_ok=True)
+        path = self.run_dir / "dns-test.json"
+        path.write_text(json.dumps(config), encoding="utf-8")
+        try:
+            ok, output = await self._exec(self.argv("run", "-test", "-c", str(path)), timeout=30)
+        finally:
+            path.unlink(missing_ok=True)
+        if ok:
+            return True, ""
+        if "unexpectedIPs" in output or "unknown field" in output.lower():
+            return False, (
+                "This Xray core does not support DNS filtering (unexpectedIPs). "
+                "Update the Xray core (25.6.8 or newer) and try again."
+            )
+        return False, f"Xray rejected the DNS config: {_short_error(output)}"
+
     async def _hot_add(self, entry: XrayEntry) -> str | None:
         """Add outbound, rule, inbound (in that order).  Returns a rejection reason."""
-        ok, output = await self._api("ado", payload=api_outbound_payload(entry))
+        _servers, _ipv4, strategy = xray_dns_options()
+        ok, output = await self._api("ado", payload=api_outbound_payload(entry, strategy))
         if not ok:
             invalid = await self.validate_outbound(entry.outbound)
             if invalid:

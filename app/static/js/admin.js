@@ -202,6 +202,37 @@
     });
   }
 
+  /* DNS test: resolve a sample name with each field, without saving */
+  var dnsButton = document.getElementById("dns-test");
+  if (dnsButton) {
+    dnsButton.addEventListener("click", function () {
+      var out = document.getElementById("dns-test-result");
+      var ipv4 = document.querySelector("[name=dns_ipv4_only]");
+      dnsButton.disabled = true;
+      out.innerHTML = '<p class="muted">Resolving www.google.com…</p>';
+      post(base + "/settings/dns-test", {
+        dns_primary: (document.getElementById("f-dns_primary") || {}).value || "",
+        dns_secondary: (document.getElementById("f-dns_secondary") || {}).value || "",
+        dns_ipv4_only: !!(ipv4 && ipv4.checked)
+      }).then(function (r) {
+        if (r.error) {
+          out.innerHTML = '<div class="alert alert-error">' + esc(r.error) + "</div>";
+          return;
+        }
+        out.innerHTML = r.results.map(function (item) {
+          if (item.skipped) return '<p class="muted">' + esc(item.label) + ": empty</p>";
+          if (item.ok) {
+            return '<div class="alert alert-success">' + esc(item.label) + ": " + esc(item.ips.join(", ")) +
+              " · " + item.ms + " ms</div>";
+          }
+          return '<div class="alert alert-error">' + esc(item.label) + ": " + esc(item.error) +
+            " · " + item.ms + " ms</div>";
+        }).join("");
+      }).catch(function () { out.innerHTML = '<div class="alert alert-error">Could not reach the panel</div>'; })
+        .then(function () { dnsButton.disabled = false; });
+    });
+  }
+
   /* add-server preview */
   var linkBox = document.getElementById("links");
   var preview = document.getElementById("link-preview");

@@ -41,7 +41,7 @@ class SettingError(ValueError):
 class SettingDef:
     key: str
     default: Any
-    kind: str  # int float str text bool url choice multi secret time path tz chat_ids
+    kind: str  # int float str text bool url choice multi secret time path tz chat_ids dns
     label: str
     group: str
     help: str = ""
@@ -56,6 +56,7 @@ GROUPS: dict[str, str] = {
     "checks": "Checks",
     "status": "Status and incidents",
     "retention": "Retention",
+    "dns": "DNS for config domains",
     "telegram": "Telegram",
 }
 
@@ -107,6 +108,15 @@ DEFINITIONS: tuple[SettingDef, ...] = (
                "Individual check rows older than this are deleted. Minimum 26.", min=26, max=24 * 31),
     SettingDef("hourly_retention_days", 90, "int", "Hourly data retention (days)", "retention",
                "Hourly rollups and closed incidents older than this are deleted.", min=31, max=730),
+    # --- dns (config domains; empty keeps Xray's current AsIs behaviour)
+    SettingDef("dns_primary", "", "dns", "Primary DNS", "dns",
+               "Tried first. An IP (8.8.8.8), IP:port (8.8.8.8:53), tcp://IP, "
+               "https://IP/dns-query (use an IP, not a domain name), or localhost. "
+               "Leave both empty to keep the current behaviour."),
+    SettingDef("dns_secondary", "", "dns", "Secondary DNS", "dns",
+               'Tip: use "localhost" as the secondary to fall back to the server\'s own DNS.'),
+    SettingDef("dns_ipv4_only", False, "bool", "IPv4 only", "dns",
+               "Only request A records, for a server with no working IPv6."),
     # --- telegram
     SettingDef("telegram_enabled", False, "bool", "Enable the bot", "telegram",
                "When off, alerts stay queued and nothing is sent."),
@@ -216,6 +226,9 @@ def validate(key: str, raw: Any) -> Any:
         if key == "telegram_token" and text and not _TOKEN_RE.match(text):
             raise SettingError("Invalid bot token format (example: 123456:ABC-DEF...).")
         return text
+    if d.kind == "dns":
+        from app.services.dns import parse_dns
+        return parse_dns(text)
     if d.kind == "str" and len(text) > 200:
         raise SettingError(f"{d.label} is too long.")
     if d.kind == "text" and len(text) > 2000:

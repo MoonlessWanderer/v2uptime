@@ -27,6 +27,14 @@
       <div class="form-grid">
         {% for d in monitor_main %}{{ field(d, values[d.key]) }}{% endfor %}
       </div>
+      <h3>DNS for config domains</h3>
+      <div class="form-grid">
+        {% for d in dns_fields %}{{ field(d, values[d.key]) }}{% endfor %}
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn" id="dns-test">Test DNS</button>
+      </div>
+      <div id="dns-test-result"></div>
       {% if monitor_adv %}
       <details class="advanced">
         <summary>Advanced settings</summary>

@@ -14,6 +14,8 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from app.services.dns import DIRECT_TAG, dns_section, is_ip
+
 API_TAG = "api"
 BLOCK_TAG = "block"
 LISTEN = "127.0.0.1"
@@ -62,9 +64,24 @@ def build_inbound(entry: XrayEntry) -> dict[str, Any]:
     }
 
 
-def build_outbound(entry: XrayEntry) -> dict[str, Any]:
+def outbound_address(outbound: dict[str, Any]) -> str:
+    block = outbound.get("settings") or {}
+    for key in ("vnext", "servers"):
+        rows = block.get(key) or []
+        if rows and isinstance(rows, list):
+            return str(rows[0].get("address") or "")
+    return ""
+
+
+def build_outbound(entry: XrayEntry, domain_strategy: str | None = None) -> dict[str, Any]:
     outbound = copy.deepcopy(entry.outbound)
     outbound["tag"] = outbound_tag(entry.server_id)
+    address = outbound_address(outbound)
+    if domain_strategy and address and not is_ip(address):
+        stream = outbound.setdefault("streamSettings", {})
+        sockopt = dict(stream.get("sockopt") or {})
+        sockopt["domainStrategy"] = domain_strategy
+        stream["sockopt"] = sockopt
     return outbound
 
 
@@ -77,14 +94,33 @@ def build_rule(entry: XrayEntry) -> dict[str, Any]:
     }
 
 
-def build_config(entries: list[XrayEntry], api_port: int, log_level: str = "warning") -> dict[str, Any]:
-    return {
+def build_config(
+    entries: list[XrayEntry],
+    api_port: int,
+    log_level: str = "warning",
+    *,
+    dns_servers: list[str] | None = None,
+    ipv4_only: bool = False,
+) -> dict[str, Any]:
+    servers = [s for s in (dns_servers or []) if s]
+    strategy = ("ForceIPv4" if ipv4_only else "ForceIP") if servers else None
+    config: dict[str, Any] = {
         "log": {"loglevel": log_level, "access": "none"},
         "api": {"tag": API_TAG, "listen": f"{LISTEN}:{api_port}", "services": ["HandlerService", "RoutingService"]},
         "inbounds": [build_inbound(e) for e in entries],
-        "outbounds": [{"tag": BLOCK_TAG, "protocol": "blackhole"}] + [build_outbound(e) for e in entries],
+        "outbounds": [{"tag": BLOCK_TAG, "protocol": "blackhole"}] + [build_outbound(e, strategy) for e in entries],
         "routing": {"domainStrategy": "AsIs", "rules": [build_rule(e) for e in entries]},
     }
+    if not servers:
+        return config
+    # Blackhole stays the first outbound. DNS queries (plain IP, tcp://, https://)
+    # are routed, so without this rule they would fall into the blackhole.
+    config["dns"] = dns_section(servers, ipv4_only)
+    config["outbounds"].append({"tag": DIRECT_TAG, "protocol": "freedom"})
+    config["routing"]["rules"].insert(0, {
+        "type": "field", "inboundTag": [config["dns"]["tag"]], "outboundTag": DIRECT_TAG,
+    })
+    return config
 
 
 def build_test_config(outbound: dict[str, Any]) -> dict[str, Any]:
@@ -98,8 +134,8 @@ def build_test_config(outbound: dict[str, Any]) -> dict[str, Any]:
 
 # Payloads for `xray api ado|adi|adrules` (each file is a partial config).
 
-def api_outbound_payload(entry: XrayEntry) -> dict[str, Any]:
-    return {"outbounds": [build_outbound(entry)]}
+def api_outbound_payload(entry: XrayEntry, domain_strategy: str | None = None) -> dict[str, Any]:
+    return {"outbounds": [build_outbound(entry, domain_strategy)]}
 
 
 def api_inbound_payload(entry: XrayEntry) -> dict[str, Any]:

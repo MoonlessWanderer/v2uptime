@@ -1,5 +1,5 @@
 {% macro field(d, value, masked="", servers=None) %}
-{% set ltr = d.kind in ("url", "path", "tz", "chat_ids", "secret", "time") %}
+{% set ltr = d.kind in ("url", "path", "tz", "chat_ids", "secret", "time", "dns") %}
 {% set user_text = d.key in ("site_title", "site_description", "test_location") %}
 <div class="field{{ ' full' if d.kind in ('text', 'multi') }}">
   {% if d.kind == "bool" %}

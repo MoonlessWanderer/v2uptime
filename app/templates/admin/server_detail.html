@@ -17,6 +17,16 @@
       <dt>Status</dt><dd><span class="status-dot {{ status }}"></span>{{ status|status_label }}{% if not server.is_active %} (inactive){% endif %}</dd>
       <dt>Protocol</dt><dd class="ltr">{{ server.protocol }} / {{ server.transport }} / {{ server.security }}</dd>
       <dt>Address</dt><dd class="ltr">{{ server.address }}:{{ server.port }}</dd>
+      {% if dns %}
+      <dt>DNS</dt>
+      <dd>
+        {% if dns.ips %}<span class="ltr">{{ dns.ips|join(', ') }}</span>
+        {% elif dns.blocked %}DNS blocked (filtered answer)
+        {% else %}DNS error{% if dns.error %} <span class="muted">({{ dns.error }})</span>{% endif %}{% endif %}
+        {% if dns.source %} · {{ dns.source }}{% endif %}
+        · {{ dns.at|time_tag('datetime') }}
+      </dd>
+      {% endif %}
       <dt>Local SOCKS</dt><dd class="ltr">{% if port %}socks5h://127.0.0.1:{{ port }}{% else %}Not loaded{% endif %}</dd>
       <dt>Public</dt><dd>{{ 'Yes' if server.is_public else 'No (hidden)' }}</dd>
       {% if metrics %}

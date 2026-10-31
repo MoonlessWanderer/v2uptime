@@ -85,6 +85,7 @@ class FakeXray:
 
 def run_cycle_with(monkeypatch, database, xray, responses, reference_ok=True, bump_epoch=False):
     calls = {}
+    monkeypatch.setattr(checker_mod.dnsdiag, "failure_kind", lambda address: None)
 
     async def fake_probe(url, proxy, timeout, accept_any_status=False):
         if proxy is None:
@@ -356,6 +357,54 @@ def test_cycle_records_connect_ms(monkeypatch, database):
     assert {c.server_id: c.connect_ms for c in Check.select()} == {1: 520, 2: None}
 
 
+def test_failed_domain_check_is_labeled_from_dns(monkeypatch, database):
+    server = make_server("Dom", address="cdn.example.com")
+    xray = FakeXray({server.id: 20001})
+
+    async def fake_probe(url, proxy, timeout, accept_any_status=False):
+        if proxy is None:
+            return ProbeResult(True, 20)
+        return FAIL
+
+    monkeypatch.setattr(checker_mod, "probe", fake_probe)
+    monkeypatch.setattr(checker_mod.dnsdiag, "failure_kind",
+                        lambda address: "dns_blocked" if address == "cdn.example.com" else None)
+    report = asyncio.run(Checker(xray, on_cycle=None).run_cycle())
+    assert report.records[0].error_type == "dns_blocked"
+    assert report.records[0].status == "fail"
+
+
+def test_failed_ip_check_keeps_its_error(monkeypatch, database):
+    server = make_server("IP", address="1.2.3.4")
+    xray = FakeXray({server.id: 20001})
+    called = []
+
+    async def fake_probe(url, proxy, timeout, accept_any_status=False):
+        if proxy is None:
+            return ProbeResult(True, 20)
+        return FAIL
+
+    monkeypatch.setattr(checker_mod, "probe", fake_probe)
+    monkeypatch.setattr(checker_mod.dnsdiag, "failure_kind", lambda address: called.append(address) or "dns")
+    report = asyncio.run(Checker(xray, on_cycle=None).run_cycle())
+    assert called == []
+    assert report.records[0].error_type == E_TIMEOUT
+
+
+def test_monitor_outage_overrides_a_dns_label(monkeypatch, database):
+    server = make_server("Dom", address="cdn.example.com")
+    xray = FakeXray({server.id: 20001})
+
+    async def fake_probe(url, proxy, timeout, accept_any_status=False):
+        return FAIL
+
+    monkeypatch.setattr(checker_mod, "probe", fake_probe)
+    monkeypatch.setattr(checker_mod.dnsdiag, "failure_kind", lambda address: "dns")
+    report = asyncio.run(Checker(xray, on_cycle=None).run_cycle())
+    assert report.network_down
+    assert report.records[0].error_type == E_MONITOR_NET
+
+
 def test_probe_command_prints_cold_warm_and_phases(connect_cost_server, socks_port, database, monkeypatch, capsys):
     from app import cli
     from app.services.settings import settings
@@ -364,9 +413,14 @@ def test_probe_command_prints_cold_warm_and_phases(connect_cost_server, socks_po
     server = make_server("🇩🇪 Germany", port=socks_port)
     settings.set("test_url", url)
     monkeypatch.setattr(cli, "_open_db", lambda: None)  # the test database is already open
+    from app.services.dns import Resolution
+    monkeypatch.setattr("app.services.dns.resolve",
+                        lambda name: Resolution(["203.0.113.5"], "system", 1_700_000_000))
+    monkeypatch.setattr("app.services.dns.failure_kind", lambda address: None)
     cli.main(["probe", str(server.id), "--count", "2"])
     out = capsys.readouterr().out
     assert "Server 1: 🇩🇪 Germany (vless/tcp/none)" in out
+    assert "DNS: 203.0.113.5 via system" in out
     lines = [line for line in out.splitlines() if line.startswith("#")]
     assert len(lines) == 2
     for line in lines:

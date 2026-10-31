@@ -7,6 +7,7 @@ protocol is "invalid" is rejected like real Xray would.
 """
 
 import json
+import os
 import socket
 import sys
 
@@ -81,6 +82,11 @@ def main(args):
     if args[0] == "run":
         config = load(args[args.index("-c") + 1])
         if "-test" in args:
+            # A dns section (including unexpectedIPs) is valid. FAKE_XRAY_REJECT_DNS
+            # imitates a core older than 25.6.8, which does not know that field.
+            if os.environ.get("FAKE_XRAY_REJECT_DNS") and "unexpectedIPs" in json.dumps(config):
+                print("Failed to start: infra/conf: unknown field: unexpectedIPs")
+                return 1
             if invalid(config):
                 print("Failed to start: infra/conf: unknown protocol: invalid")
                 return 1

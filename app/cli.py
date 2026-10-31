@@ -142,6 +142,32 @@ def _phase_text(phases: dict[str, int]) -> str:
     return f" ({', '.join(parts)})" if parts else ""
 
 
+def _print_dns(address: str) -> None:
+    from app.services.dns import is_ip, resolve
+    from app.timeutil import fmt_datetime
+
+    if is_ip(address):
+        return
+    from app.services.settings import settings
+
+    answer = resolve(address)
+    when = fmt_datetime(answer.at, settings.tz)
+    if answer.ips:
+        print(f"DNS: {', '.join(answer.ips)} via {answer.source} · {when}")
+    elif answer.blocked:
+        print(f"DNS: DNS blocked (filtered answer) via {answer.source} · {when}")
+    else:
+        print(f"DNS: DNS error ({answer.error or 'no answer'}) · {when}")
+
+
+def _dns_failure(address: str) -> str | None:
+    from app.services.dns import failure_kind, is_ip
+
+    if is_ip(address):
+        return None
+    return failure_kind(address)
+
+
 def cmd_probe(args: argparse.Namespace) -> None:
     """Show where a server's ping comes from: cold vs warm request, with connection phases."""
     import asyncio
@@ -161,6 +187,7 @@ def cmd_probe(args: argparse.Namespace) -> None:
     url, timeout = settings.get("test_url"), float(settings.get("check_timeout"))
     proxy = socks_url(server.socks_port)
     print(f"Server {server.id}: {server.name} ({server.protocol}/{server.transport}/{server.security})")
+    _print_dns(server.address)
     print(f"Test URL: {url} · timeout {timeout:g}s each · via {proxy}")
     print("Phases in ms: tcp = to local Xray, socks = SOCKS handshake, tls = TLS to the test host through "
           "the tunnel, ttfb = request sent to response headers.")
@@ -169,7 +196,8 @@ def cmd_probe(args: argparse.Namespace) -> None:
         timers: list = []
         result = asyncio.run(probe(url, proxy, timeout, warm=True, timers=timers))
         if not result.ok:
-            print(f"#{attempt}  failed: {error_label(result.error_type)} · {result.detail or ''}")
+            kind = _dns_failure(server.address)
+            print(f"#{attempt}  failed: {error_label(kind or result.error_type)} · {result.detail or ''}")
             continue
         colds.append(result.connect_ms)
         line = f"#{attempt}  cold {result.connect_ms} ms{_phase_text(timers[0].phases)}"

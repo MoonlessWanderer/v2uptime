@@ -175,6 +175,26 @@ Settings live in the database and can be changed in the admin panel without a re
 | Flap window / threshold | 30 minutes / 4 transitions |
 | Raw check retention | 48 hours (minimum 26) |
 | Hourly retention | 90 days |
+| Primary DNS / Secondary DNS | empty (config domains keep the current behaviour) |
+| IPv4 only | off |
+
+### DNS for config domains
+
+Settings → Monitoring → **DNS for config domains**. Domain names in configs are resolved with the primary DNS, then the secondary if the first fails or returns only a filtered answer (`10.10.34.0/24`, a range used by filtering in Iran). Each server is tried for 3 seconds.
+
+| Format | Example | Protocol |
+|---|---|---|
+| IP | `8.8.8.8` | UDP port 53 |
+| IP:port | `8.8.8.8:53` | UDP |
+| `tcp://IP[:port]` | `tcp://1.1.1.1` | TCP |
+| `https://…` | `https://1.1.1.1/dns-query` | DoH (use an IP, not a domain name) |
+| `localhost` | `localhost` | the server's own DNS |
+
+Leave both empty and nothing changes: Xray has no `dns` section and `domainStrategy` stays `AsIs`. Set `localhost` as the secondary to fall back to the server's own DNS. **IPv4 only** requests A records (`ForceIPv4`). **Test DNS** resolves `www.google.com` with each field and shows the addresses, the time, or the error.
+
+Saving a DNS server restarts Xray (the `dns` section cannot change over the API). The check that overlaps that restart is not recorded. The config is tested with `xray run -test` first. `unexpectedIPs` needs Xray **25.6.8** or newer; an older core refuses the save and asks for an update.
+
+When a check of a domain server fails, the panel resolves that name with the same chain. A failure is stored as **DNS error**. An answer that is only inside `10.10.34.0/24` is **DNS blocked (filtered answer)**. The admin server page, and `sudo v2uptime probe ID`, show the last addresses, which DNS answered (`primary`, `secondary`, or `system`), and the time. The result is cached for 60 seconds. The public page is unchanged.
 
 Status, used by the public page, incidents, and Telegram:
 
@@ -253,6 +273,7 @@ Nothing from your own `config.py` or database is used.
 |---|---|
 | No checks run | Admin dashboard, Xray section. If the state is `missing`, use menu item 3 (Update Xray core) or `--xray-zip`. |
 | A server is marked rejected by Xray | The config is invalid. The error is on the server page. Fix the link or choose Try again. |
+| Domain servers fail, or the error is DNS blocked | Settings → Monitoring → DNS for config domains. Set a primary DNS (and `localhost` as the secondary if the server's own DNS should be the fallback). Test DNS shows the answer for `www.google.com`. This needs Xray 25.6.8 or newer. |
 | Every server is Unknown | The monitor’s internet may be down (red banner on the dashboard), or Xray is restarting. |
 | Telegram sends nothing | Telegram page, Send test message. The queue and the last error are on the dashboard. `auto` or `via_server` needs at least one online server. |
 | Admin path forgotten | `sudo v2uptime`, then 8 (Service status). |

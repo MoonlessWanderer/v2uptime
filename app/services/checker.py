@@ -20,7 +20,9 @@ from typing import Awaitable, Callable
 
 import httpx
 
-from app.models import STATUS_FAIL, STATUS_OK, STATUS_UNKNOWN
+from app.db import run_db
+from app.models import STATUS_FAIL, STATUS_OK, STATUS_UNKNOWN, Server
+from app.services import dns as dnsdiag
 from app.services import net
 from app.services.settings import settings
 from app.services.xray_manager import XrayManager
@@ -36,6 +38,7 @@ E_REFUSED = "connection_refused"
 E_RESET = "connection_reset"
 E_TLS = "tls"
 E_DNS = "dns"
+E_DNS_BLOCKED = "dns_blocked"
 E_HTTP = "http_status"
 E_PROXY = "proxy"
 E_NETWORK = "network"
@@ -49,6 +52,7 @@ ERROR_LABELS: dict[str, str] = {
     E_RESET: "Connection reset",
     E_TLS: "TLS error",
     E_DNS: "DNS error",
+    E_DNS_BLOCKED: "DNS blocked (filtered answer)",
     E_HTTP: "Invalid HTTP status",
     E_PROXY: "Proxy error",
     E_NETWORK: "Network error",
@@ -275,7 +279,8 @@ class Checker:
         port = self.xray.loaded_ports().get(server_id)
         if port is None:
             return ProbeResult(False, None, E_XRAY, "This server is not loaded in Xray.")
-        return await self.check_server(port, settings.get("check_timeout"), settings.get("test_url"))
+        result = await self.check_server(port, settings.get("check_timeout"), settings.get("test_url"))
+        return await self._with_dns(server_id, result)
 
     async def run_cycle(self) -> CycleReport:
         report = CycleReport(started_at=now_ts())
@@ -316,6 +321,7 @@ class Checker:
 
         results = {sid: result for sid, _, result in outcomes}
         times = {sid: ts for sid, ts, _ in outcomes}
+        results = await self._diagnose(results)
         final, network_down = apply_network_rule(results, reference.ok)
         report.reference_ok = reference.ok
         report.network_down = network_down
@@ -331,6 +337,35 @@ class Checker:
         report.fail = sum(r.status == STATUS_FAIL for r in report.records)
         report.unknown = sum(r.status == STATUS_UNKNOWN for r in report.records)
         return report
+
+    async def _with_dns(self, server_id: int, result: ProbeResult) -> ProbeResult:
+        diagnosed = await self._diagnose({server_id: result})
+        return diagnosed[server_id]
+
+    async def _diagnose(self, results: dict[int, ProbeResult]) -> dict[int, ProbeResult]:
+        """When a domain server's check failed, label a DNS failure from the same chain Xray uses."""
+        failed = [sid for sid, result in results.items() if not result.ok and result.error_type != E_XRAY]
+        if not failed:
+            return results
+        addresses = await run_db(
+            lambda: {row.id: row.address for row in Server.select().where(Server.id.in_(failed))}
+        )
+        semaphore = asyncio.Semaphore(8)
+
+        async def one(server_id: int) -> tuple[int, str | None]:
+            address = addresses.get(server_id) or ""
+            if not address or dnsdiag.is_ip(address):
+                return server_id, None
+            async with semaphore:
+                kind = await asyncio.to_thread(dnsdiag.failure_kind, address)
+            return server_id, kind
+
+        for server_id, kind in await asyncio.gather(*(one(sid) for sid in failed)):
+            if not kind:
+                continue
+            old = results[server_id]
+            results[server_id] = ProbeResult(False, None, kind, old.detail)
+        return results
 
     async def run_forever(self) -> None:
         self.running = True
