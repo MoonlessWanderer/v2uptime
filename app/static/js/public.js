@@ -1,5 +1,5 @@
 /*
- * Public status page: server cards, sort, search, open card with one range control for its numbers,
+ * Public status page: server cards, sort, open card with one range control for its numbers,
  * status bar and ping chart, a shared tooltip/cursor for bars and chart (mouse and touch), 60s refresh.
  */
 (function () {
@@ -14,9 +14,7 @@
   var ISO_L = "\u2066", ISO_R = "\u2069";
   var list = document.getElementById("live-list");
   var tooltip = document.getElementById("tooltip");
-  var emptySearch = document.getElementById("empty-search");
-  var search = document.getElementById("q");
-  var state = { tab: "all", query: "", open: {}, ranges: {} };
+  var state = { tab: "all", open: {}, ranges: {} };
   var cache = {};  // "id:range" -> /api/servers/{id}/history payload
   try {
     var saved = JSON.parse(localStorage.getItem("status-view") || "{}");
@@ -36,7 +34,7 @@
 
   function cardOf(id) { return document.querySelector('#servers > li[data-id="' + id + '"]'); }
 
-  // ------------------------------------------------------------ sort + search
+  // ------------------------------------------------------------ sort
   function applyView() {
     document.querySelectorAll("[data-tab]").forEach(function (el) {
       var on = el.getAttribute("data-tab") === state.tab;
@@ -44,7 +42,7 @@
       el.setAttribute("aria-selected", on ? "true" : "false");
     });
     var ul = document.getElementById("servers");
-    if (!ul) { if (emptySearch) emptySearch.hidden = true; return; }
+    if (!ul) return;
     var key = state.tab === "fastest" ? "data-rank-fastest" : state.tab === "stable" ? "data-rank-stable" : "data-order";
     var rows = Array.prototype.slice.call(ul.children);
     rows.sort(function (a, b) {
@@ -54,15 +52,7 @@
       var ra = parseInt(a.getAttribute(key), 10), rb = parseInt(b.getAttribute(key), 10);
       return (isNaN(ra) ? 1e9 : ra) - (isNaN(rb) ? 1e9 : rb);
     });
-    var shown = 0;
-    rows.forEach(function (row) {
-      ul.appendChild(row);
-      var text = row.getAttribute("data-search") || "";
-      var match = !state.query || text.indexOf(state.query) !== -1;
-      row.hidden = !match;
-      if (match) shown++;
-    });
-    if (emptySearch) emptySearch.hidden = shown > 0 || rows.length === 0;
+    rows.forEach(function (row) { ul.appendChild(row); });
   }
 
   // ------------------------------------------------------- open card + range
@@ -391,13 +381,6 @@
   document.querySelectorAll("[data-tab]").forEach(function (el) {
     el.addEventListener("click", function () { state.tab = el.getAttribute("data-tab"); saveTab(); applyView(); });
   });
-  if (search) {
-    var timer;
-    search.addEventListener("input", function () {
-      clearTimeout(timer);
-      timer = setTimeout(function () { state.query = search.value.trim().toLowerCase(); applyView(); }, 120);
-    });
-  }
 
   var pulse = setInterval(refresh, REFRESH_MS);
   document.addEventListener("visibilitychange", function () {

@@ -6,7 +6,7 @@
   <form method="post" action="{{ admin_url('/servers/' ~ server.id ~ '/edit') }}" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <div class="field"><label for="name">Name</label><input type="text" id="name" name="name" value="{{ server.name }}" required maxlength="200" dir="auto"></div>
-    <div class="field"><label for="country">Country code (optional)</label><input type="text" id="country" name="country" value="{{ server.country }}" maxlength="2" class="ltr" placeholder="DE" aria-describedby="country-help"><span class="help" id="country-help">Used for search and the API. Not shown next to the name.</span></div>
+    <div class="field"><label for="country">Country code (optional)</label><input type="text" id="country" name="country" value="{{ server.country }}" maxlength="2" class="ltr" placeholder="DE" aria-describedby="country-help"><span class="help" id="country-help">Used by the API. Not shown next to the name.</span></div>
     <div class="field full"><label for="tags">Tags</label><input type="text" id="tags" name="tags" value="{{ server.tags }}" dir="auto"></div>
     <div class="field full">
       <label for="raw_link">Share link</label>

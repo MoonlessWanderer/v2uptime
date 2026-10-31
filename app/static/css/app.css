@@ -197,12 +197,6 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .public .seg { color: var(--muted); }
 .seg:hover { text-decoration: none; color: var(--text); }
 .seg.is-active { background: var(--surface); color: var(--text); font-weight: 600; }
-.search {
-  display: flex; align-items: center; gap: 8px; flex: 1; min-width: 160px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; color: var(--text-2);
-}
-.public .search { color: var(--muted); }
-.search input { flex: 1; min-width: 0; border: 0; background: transparent; padding: 8px 0; outline: none; color: var(--text); }
 
 /* ------------------------------------------------------------------ summary */
 .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }

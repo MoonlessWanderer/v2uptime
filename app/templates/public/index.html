@@ -26,16 +26,9 @@
         <button role="tab" type="button" class="seg" data-tab="fastest" aria-selected="false">{{ t('tab_fastest') }}</button>
         <button role="tab" type="button" class="seg" data-tab="stable" aria-selected="false">{{ t('tab_stable') }}</button>
       </div>
-      {% if data.servers|length > 15 %}
-      <label class="search">
-        <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-        <input type="search" id="q" placeholder="{{ t('search_placeholder') }}" autocomplete="off" aria-label="{{ t('search_label') }}">
-      </label>
-      {% endif %}
     </div>
 
     <div id="live-list">{% include "public/_list.html" %}</div>
-    <p class="empty" id="empty-search" hidden>{{ t('no_match') }}</p>
   </main>
 
   <footer class="site-footer fine">{{ t('footer_refresh') }} · {{ t('footer_times') }} <bdi dir="ltr">{{ tz_label(settings.tz) }} ({{ settings.tz }})</bdi></footer>

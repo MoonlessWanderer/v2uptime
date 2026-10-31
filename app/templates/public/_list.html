@@ -8,8 +8,7 @@
   {% set incident = s.last_incident %}
   {% set label = status_text(s.status, s.collecting) %}
   <li class="card" data-id="{{ s.id }}" data-order="{{ loop.index }}" data-collecting="{{ '1' if s.collecting else '0' }}"
-      data-rank-fastest="{{ rank_fast }}" data-rank-stable="{{ rank_stable }}" data-status="{{ s.status }}"
-      data-search="{{ (s.name ~ ' ' ~ s.protocol ~ ' ' ~ s.country ~ ' ' ~ s.tags|join(' '))|lower }}">
+      data-rank-fastest="{{ rank_fast }}" data-rank-stable="{{ rank_stable }}" data-status="{{ s.status }}">
     <button type="button" class="card-main" aria-expanded="false" aria-controls="detail-{{ s.id }}">
       <span class="card-line card-top">
         <span class="card-name" title="{{ s.name }}"><bdi>{{ s.name }}</bdi></span>

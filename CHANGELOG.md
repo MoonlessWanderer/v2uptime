@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.4.1
+
+- The public page no longer has a server search box. Sorting stays.
+
 ## 1.4.0
 
 - An open card starts on 1h, and the same control has 24h, 7d, and 30d. On every range the chart point is the same cell as the status bar. A 1h or 24h point's ping is the median of that cell; a 7d or 30d point's ping is the average of that cell. The tooltip shows that cell.

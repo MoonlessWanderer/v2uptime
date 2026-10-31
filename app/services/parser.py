@@ -192,7 +192,7 @@ def country_from_remark(remark: str) -> str:
     Regional indicator letters are read in consecutive pairs, the way they
     are drawn; a lone letter or an unfinished pair is ignored. In a tunnel
     name such as ``🇮🇷➡️🇩🇪`` the last flag is the exit country (``DE``).
-    This only fills ``Server.country`` (search and API); names are always
+    This only fills ``Server.country`` for the API; names are always
     shown exactly as written, and no flag is ever added next to them.
     """
     code, index = "", 0
