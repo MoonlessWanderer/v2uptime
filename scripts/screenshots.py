@@ -86,7 +86,6 @@ def seed(now: int) -> dict[str, int]:
     settings.set("test_location", "Tehran")
     settings.set("site_title_fa", "وضعیت سرورها")
     settings.set("site_description_fa", "کیفیت اتصال لحظه‌ای سرورها")
-    settings.set("test_location_fa", "تهران")
     links = "\n".join(f"{link}#{quote(name)}" for name, link, _, _ in SERVERS)
     result = server_service.add_links(links)
     assert not result.errors, result.errors
@@ -486,8 +485,8 @@ def check_refresh(browser, panel: Panel, failures: list[str]) -> None:
     page.goto(panel.url + "/")
     settle(page)
     order = page.evaluate("""() => [...document.querySelectorAll(
-        '.page-top, #live-summary, .sort-row, #live-list, .site-footer')].map(el => el.id || el.className)""")
-    if order != ["page-top", "live-summary", "sort-row", "live-list", "site-footer fine"]:
+        '.page-top, #live-summary, .sort-row, #live-list')].map(el => el.id || el.className)""")
+    if order != ["page-top", "live-summary", "sort-row", "live-list"]:
         failures.append(f"page order is {order}")
     live = page.evaluate("""() => ({
         container: document.getElementById('live-summary').getAttribute('aria-live'),

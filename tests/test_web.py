@@ -24,6 +24,7 @@ def app_factory(tmp_path):
                      log_dir=tmp_path / "logs", cookie_secure=cookie_secure)
         return create_app(cfg, background=False)
     login_limiter._failures.clear()
+    login_limiter._alert_at = None
     return build
 
 

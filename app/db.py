@@ -45,6 +45,7 @@ def init_db(path: str | Path) -> SqliteDatabase:
     _retire_subscriptions(database)
     _drop_retired_settings()
     _migrate_legacy_defaults()
+    _migrate_security_event()
     return database
 
 
@@ -184,6 +185,28 @@ def _drop_retired_settings() -> None:
     removed = Setting.delete().where(Setting.key == "use_jalali").execute()
     if removed:
         log.info("migration: removed retired setting", extra={"key": "use_jalali"})
+
+
+def _migrate_security_event() -> None:
+    """Add the security alert to a saved event list, once.
+
+    Installs that never saved ``telegram_events`` already pick up the new
+    default, so this leaves them alone. The marker stops a later restart from
+    turning the alert back on after an admin switches it off.
+    """
+    from app.models import Setting
+
+    if Setting.get_or_none(Setting.key == "security_event_added"):
+        return
+    row = Setting.get_or_none(Setting.key == "telegram_events")
+    if row is not None:
+        events = [part for part in row.value.split(",") if part]
+        if "security" not in events:
+            events.append("security")
+            row.value = ",".join(events)
+            row.save()
+            log.info("migration: added security telegram event")
+    Setting.create(key="security_event_added", value="1")
 
 
 def _migrate_legacy_defaults() -> None:

@@ -153,6 +153,11 @@ def panel_started(at: int, version: str, servers: int) -> str:
             f"{t(at)}")
 
 
+def login_lock_alert(username: str) -> str:
+    return (f'🔐 Many failed admin logins for "{e(username)}" from several IPs. '
+            "Sign-ins from IPs that recently signed in still work.")
+
+
 def test_message(at: int, via: str) -> str:
     location = settings.get("test_location")
     lines = [f"✅ <b>Test message</b>", "",

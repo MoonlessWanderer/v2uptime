@@ -8,6 +8,7 @@ from pathlib import Path
 from app.db import _migrate_legacy_defaults
 from app.legacy_defaults import LEGACY_DEFAULTS
 from app.models import Setting
+from app.services.settings import settings
 from app.services.telegram import messages
 from app.timeutil import now_ts
 
@@ -71,6 +72,14 @@ def test_telegram_messages_are_english(database):
     assert any("Fastest" in text for text in outputs)
     for index, text in enumerate(outputs):
         _assert_latin(f"telegram[{index}]", text)
+
+
+def test_telegram_still_shows_the_test_location(database):
+    settings.set("test_location", "Tehran")
+    text = messages.test_message(now_ts(), "direct")
+    assert "Test location:" in text and "Tehran" in text
+    chunks = messages.report("Daily report", "24h", [], None, None, now_ts())
+    assert any("Tehran" in chunk for chunk in chunks)
 
 
 def test_cli_help_is_english():

@@ -21,12 +21,15 @@ from app import __version__
 from app.db import run_db
 from app.models import Admin, Check, Incident, Server
 from app.security import (
+    clear_trusted_ips,
     client_ip,
     csrf_token,
     csrf_valid,
     dummy_hash,
     hash_password,
+    is_trusted_ip,
     login_limiter,
+    remember_trusted_ip,
     validate_password,
     verify_password,
 )
@@ -117,23 +120,45 @@ async def login_page(request: Request):
     return page(request, "login.html", None, "login", has_admin=await run_db(Admin.select().exists))
 
 
+async def _username_locked(request: Request, username: str, known: bool) -> None:
+    """A username just crossed its failure ceiling. The reply stays generic."""
+    log.warning("admin username locked after failed logins", extra={"username": username})
+    if not known:
+        return
+    notifier = services(request).notifier
+    if notifier.wants("security") and login_limiter.claim_security_alert():
+        from app.services.telegram import messages
+
+        await notifier.outbox.enqueue("security", messages.login_lock_alert(username), now_ts())
+
+
 @router.post("/login")
 async def login(request: Request):
     form = await checked_form(request)
     username = str(form.get("username", "")).strip()
     password = str(form.get("password", ""))
-    keys = [f"ip:{client_ip(request)}", f"user:{username.lower()}"]
+    ip = client_ip(request)
+    ip_key = f"ip:{ip}"
+    user_key = f"user:{username.lower()}"
+    admin = await run_db(Admin.get_or_none, Admin.username == username)
+    trusted = bool(admin) and await run_db(is_trusted_ip, admin.id, ip)
+    keys = [ip_key] if trusted else [ip_key, user_key]
     wait = login_limiter.retry_after(keys)
     if wait:
         flash(request, "error", f"Too many failed attempts. Try again in {wait // 60 + 1} minutes.")
         return redirect("/login")
-    admin = await run_db(Admin.get_or_none, Admin.username == username)
     valid = await run_db(verify_password, password, admin.password_hash if admin else dummy_hash())
     if not admin or not valid:
-        login_limiter.failure(keys)
+        was_locked = login_limiter.retry_after([user_key]) > 0
+        login_limiter.failure([ip_key])
+        if not trusted:
+            login_limiter.failure([user_key])
+            if not was_locked and login_limiter.retry_after([user_key]) > 0:
+                await _username_locked(request, username, admin is not None)
         flash(request, "error", "Incorrect username or password.")
         return redirect("/login")
-    login_limiter.reset(keys)
+    login_limiter.reset([ip_key, user_key])
+    await run_db(remember_trusted_ip, admin.id, ip)
     request.session.clear()
     request.session.update(admin_id=admin.id, pwd_at=admin.password_changed_at, login_at=now_ts())
     return redirect("/")
@@ -575,6 +600,7 @@ async def password_change(request: Request):
     admin.password_hash = await run_db(hash_password, new)
     admin.password_changed_at = max(now_ts(), admin.password_changed_at + 1)
     await run_db(admin.save)
+    await run_db(clear_trusted_ips, admin.id)
     request.session["pwd_at"] = admin.password_changed_at  # keep this session, invalidate others
     flash(request, "success", "Password changed.")
     return redirect("/password")

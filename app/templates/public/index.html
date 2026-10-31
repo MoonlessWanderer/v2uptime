@@ -30,8 +30,6 @@
 
     <div id="live-list">{% include "public/_list.html" %}</div>
   </main>
-
-  <footer class="site-footer fine">{{ t('footer_refresh') }} · {{ t('footer_times') }} <bdi dir="ltr">{{ tz_label(settings.tz) }} ({{ settings.tz }})</bdi></footer>
 </div>
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
 <script type="application/json" id="i18n">{{ i18n|tojson }}</script>

@@ -23,6 +23,7 @@ TELEGRAM_EVENTS: tuple[tuple[str, str], ...] = (
     ("system", "System events (Xray, panel restart)"),
     ("daily", "Daily report"),
     ("weekly", "Weekly report"),
+    ("security", "Security alerts"),
 )
 
 WEEKDAY_CHOICES: tuple[tuple[str, str], ...] = (
@@ -74,7 +75,7 @@ DEFINITIONS: tuple[SettingDef, ...] = (
     SettingDef("site_description", "Real-time connection quality of our servers", "text", "Site description", "general",
                "One line under the title. Leave empty to hide it."),
     SettingDef("test_location", "", "str", "Test location", "general",
-               "Shown under the server list, next to the last check. Leave empty to hide it."),
+               "Shown in Telegram reports."),
     SettingDef("public_language", "en", "choice", "Public page language", "general",
                "Language of the status page.",
                choices=(("en", "English"), ("fa", "Persian"))),
@@ -82,8 +83,6 @@ DEFINITIONS: tuple[SettingDef, ...] = (
                "Used when the status page is in Persian. Leave empty to use the main title."),
     SettingDef("site_description_fa", "", "text", "Site description (Persian)", "general",
                "Used when the status page is in Persian. Leave empty to use the main description."),
-    SettingDef("test_location_fa", "", "str", "Test location (Persian)", "general",
-               "Used when the status page is in Persian. Leave empty to use the main location."),
     SettingDef("timezone", "Asia/Tehran", "tz", "Display timezone", "general",
                "Times are stored in UTC and shown in this timezone."),
     SettingDef("admin_path", "/admin", "path", "Admin path", "general",
@@ -152,6 +151,7 @@ DEFINITIONS: tuple[SettingDef, ...] = (
     SettingDef("telegram_update_offset", 0, "int", "", "internal", internal=True),
     SettingDef("last_daily_report", "", "str", "", "internal", internal=True),
     SettingDef("last_weekly_report", "", "str", "", "internal", internal=True),
+    SettingDef("security_event_added", False, "bool", "", "internal", internal=True),
 )
 
 BY_KEY: dict[str, SettingDef] = {d.key: d for d in DEFINITIONS}

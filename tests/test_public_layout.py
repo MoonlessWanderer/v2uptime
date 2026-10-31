@@ -118,6 +118,7 @@ def _hour_tooltip_matches_the_closed_card(page) -> None:
 def test_public_layout_in_both_languages(panel):
     from playwright.sync_api import sync_playwright
 
+    settings.set("test_location", "Tehran")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
@@ -129,14 +130,13 @@ def test_public_layout_in_both_languages(panel):
                 page.wait_for_selector(".card")
                 assert page.locator("html").get_attribute("lang") == lang
                 _no_horizontal_scroll(page)
+                html = page.content()
+                assert page.locator("footer").count() == 0
+                assert "Test location" not in html and "محل تست" not in html
+                assert "Tehran" not in page.locator(".check-line").inner_text()
+                title = page.locator(".check-line time").get_attribute("title")
+                assert title and re.search(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC[+-]\d{2}:\d{2}$", title)
                 if lang == "fa":
-                    footer = page.evaluate("""() => {
-                        const el = document.querySelector('footer bdi');
-                        return {dir: el.getAttribute('dir'), text: el.innerText.trim()};
-                    }""")
-                    assert footer["dir"] == "ltr"
-                    assert footer["text"].startswith("UTC+") and "(" in footer["text"] and footer["text"].endswith(")")
-                    assert "زمان‌ها به وقت" in page.locator("footer").inner_text()
                     edges = page.evaluate("""() => {
                         const card = document.querySelector('.card').getBoundingClientRect();
                         const ping = document.querySelector('.card-ping').getBoundingClientRect();

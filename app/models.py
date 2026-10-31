@@ -40,6 +40,18 @@ class Admin(BaseModel):
         table_name = "admins"
 
 
+class TrustedLogin(BaseModel):
+    """An IP that signed in successfully. A distributed attack cannot lock this IP out."""
+
+    admin = ForeignKeyField(Admin, backref="trusted_logins", on_delete="CASCADE")
+    ip = CharField(max_length=64)
+    last_success = IntegerField()
+
+    class Meta:
+        table_name = "trusted_logins"
+        indexes = ((("admin", "ip"), True),)
+
+
 class Server(BaseModel):
     name = CharField(max_length=200)
     raw_link = TextField()
@@ -154,6 +166,7 @@ class TelegramOutbox(BaseModel):
 
 ALL_MODELS: list[type[BaseModel]] = [
     Admin,
+    TrustedLogin,
     Server,
     Check,
     HourlyStat,

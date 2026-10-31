@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.4.4
+
+- The admin server table fits at 1280px. Row actions are icons, the grip moves a row with the arrow keys, and the checkbox, grip, and name stay visible while the rest of the table scrolls.
+- Five failures from one IP no longer lock the admin username. That limit is 50 failures in 15 minutes, and an IP that signed in during the last 30 days is exempt. Changing the password forgets those IPs.
+- Numbers on the public ping chart are drawn on top of the line.
+- The public page no longer shows a test location or a footer. The last-check time still carries the timezone in its tooltip. Test location remains in Telegram reports.
+
 ## 1.4.3
 
 - An open 1h cell is labeled with its own minute, the same clock as the closed card. Minutes with no check after the last one are left out. A failure or an unknown result keeps its minute.

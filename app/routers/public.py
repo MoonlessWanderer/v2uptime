@@ -30,8 +30,7 @@ def localized_status(data: dict, lang: str) -> dict:
     view = dict(data)
     site = dict(data.get("site") or {})
     if lang == "fa":
-        for key, setting in (("title", "site_title_fa"), ("description", "site_description_fa"),
-                             ("location", "test_location_fa")):
+        for key, setting in (("title", "site_title_fa"), ("description", "site_description_fa")):
             value = (settings.get(setting) or "").strip()
             if value:
                 site[key] = value

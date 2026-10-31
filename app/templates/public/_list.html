@@ -56,7 +56,7 @@
   </li>
   {% endfor %}
 </ul>
-<p class="fine check-line">{{ t('last_check') }} {{ data.last_check_at|time_tag }}{% if data.site.location %} · {{ t('test_location') }} <bdi>{{ data.site.location }}</bdi>{% endif %}</p>
+<p class="fine check-line">{{ t('last_check') }} {{ data.last_check_at|time_tag }}</p>
 {% else %}
 <div class="empty"><p>{{ t('empty') }}</p></div>
 {% endif %}

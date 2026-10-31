@@ -162,6 +162,8 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .btn-danger { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
 .btn-danger:hover { background: var(--bad-soft); }
 .btn-sm { min-height: 32px; padding: 4px 10px; font-size: var(--fs-sm); }
+.btn.btn-icon { width: 32px; min-width: 32px; height: 32px; padding: 0; }
+.btn.btn-icon.is-off { color: var(--muted); opacity: .45; }
 .icon-btn {
   display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%;
   border: 1px solid var(--border); background: var(--surface); color: var(--text-2); cursor: pointer;
@@ -180,7 +182,7 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .sr-only {
   position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
 }
-.check-line { margin: 14px 0 0; text-align: center; }
+.check-line { margin: 14px 0 32px; text-align: center; }
 .theme-toggle .ic-moon { display: none; }
 :root[data-theme="dark"] .theme-toggle .ic-sun { display: none; }
 :root[data-theme="dark"] .theme-toggle .ic-moon { display: block; }
@@ -363,6 +365,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
 tr.is-dragging { opacity: .4; }
 tr.drop-target td { box-shadow: inset 0 2px 0 var(--accent); }
 .drag-handle { cursor: grab; color: var(--muted); touch-action: none; }
+.grip { display: inline-grid; place-items: center; width: 24px; height: 24px; cursor: grab; }
 .check-col { width: 36px; }
 .row-check { width: 20px; height: 20px; margin: 0; vertical-align: middle; }
 .bulk-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
@@ -378,8 +381,43 @@ tr.drop-target td { box-shadow: inset 0 2px 0 var(--accent); }
 .form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
 @media (min-width: 800px) { .form-grid { grid-template-columns: 1fr 1fr; } .form-grid .full { grid-column: 1 / -1; } }
 @media (min-width: 800px) { .form-grid.single { grid-template-columns: 1fr; } }
+#server-table { --col-check: 36px; --col-handle: 28px; width: max-content; min-width: 100%; }
 #server-table td { white-space: nowrap; }
-#server-table td:nth-child(2) { white-space: normal; min-width: 170px; }
+#server-table .col-check { width: var(--col-check); min-width: var(--col-check); max-width: var(--col-check); }
+#server-table .col-handle { width: var(--col-handle); min-width: var(--col-handle); max-width: var(--col-handle); padding-inline: 0; text-align: center; }
+#server-table .col-name { width: 240px; max-width: 240px; }
+#server-table td.col-name a {
+  display: block; width: 240px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#server-table td.col-status { white-space: normal; }
+#server-table .row-actions { display: inline-flex; align-items: center; gap: 4px; }
+#server-table .row-actions form { display: inline-flex; margin: 0; }
+#server-table .test-mark {
+  display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px;
+  width: 56px; min-width: 56px; max-width: 56px; overflow: hidden;
+  font-size: var(--fs-xs); font-variant-numeric: tabular-nums;
+}
+#server-table .test-mark::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none;
+}
+#server-table .test-mark.is-ok { color: var(--ok); }
+#server-table .test-mark.is-bad { color: var(--bad); }
+@media (max-width: 1279px) {
+  #server-table .col-check,
+  #server-table .col-handle,
+  #server-table .col-name { position: sticky; background: var(--surface); }
+  #server-table thead .col-check,
+  #server-table thead .col-handle,
+  #server-table thead .col-name { z-index: 2; }
+  #server-table tbody .col-check,
+  #server-table tbody .col-handle,
+  #server-table tbody .col-name { z-index: 1; }
+  #server-table .col-check { left: 0; }
+  #server-table .col-handle { left: var(--col-check); }
+  #server-table .col-name { left: calc(var(--col-check) + var(--col-handle)); }
+  #server-table tbody tr:hover td { background: var(--surface-2); }
+  #server-table tbody tr:has(.row-check:checked) td { background: var(--accent-soft); }
+}
 .field label, .field .label { display: block; font-weight: 400; font-size: var(--fs-sm); margin-bottom: 5px; }
 .field .help { display: block; color: var(--muted); font-size: var(--fs-xs); margin-top: 4px; }
 .input, .field input[type=text], .field input[type=password], .field input[type=number], .field input[type=url],

@@ -1,7 +1,7 @@
 {% extends "admin/base.html" %}
 {% block page_title %}Servers{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Servers</h1><span class="muted">{{ rows|length }} servers · Drag rows, or use the up and down buttons, to reorder.</span></div>
+<div class="page-head"><h1>Servers</h1><span class="muted">{{ rows|length }} servers · Drag a row, or focus its handle and use the arrow keys, to reorder.</span></div>
 
 <section class="panel">
   <h2>Add servers</h2>
@@ -28,45 +28,43 @@
   <div class="table-wrap">
   <table class="table" id="server-table">
     <thead><tr>
-      <th class="check-col"><input type="checkbox" id="check-all" class="row-check" aria-label="Select all"></th>
-      <th></th><th>Name</th><th>Status</th><th>Protocol</th><th class="num">Ping</th><th class="num">Uptime 24h</th><th class="num">Local port</th><th>Visibility</th><th></th>
+      <th class="check-col col-check"><input type="checkbox" id="check-all" class="row-check" aria-label="Select all"></th>
+      <th class="col-handle"></th><th class="col-name">Name</th><th>Status</th><th>Protocol</th><th class="num">Ping</th><th class="num">Uptime 24h</th><th class="num">Local port</th><th>Visibility</th><th></th>
     </tr></thead>
     <tbody>
     {% for row in rows %}{% set s = row.s %}
       <tr data-id="{{ s.id }}" draggable="true">
-        <td class="check-col"><input type="checkbox" class="row-check" data-id="{{ s.id }}" aria-label="Select {{ s.name }}"></td>
-        <td class="drag-handle" title="Drag to reorder"><svg class="ic"><use href="#i-grip"/></svg></td>
-        <td>
-          <a href="{{ admin_url('/servers/' ~ s.id) }}"><strong><bdi>{{ s.name }}</bdi></strong></a>
+        <td class="check-col col-check"><input type="checkbox" class="row-check" data-id="{{ s.id }}" aria-label="Select {{ s.name }}"></td>
+        <td class="drag-handle col-handle"><span class="grip" tabindex="0" role="button" aria-label="Reorder {{ s.name }}" title="Drag to reorder"><svg class="ic" aria-hidden="true"><use href="#i-grip"/></svg></span></td>
+        <td class="col-name">
+          <a href="{{ admin_url('/servers/' ~ s.id) }}" title="{{ s.name }}"><strong><bdi>{{ s.name }}</bdi></strong></a>
           {% if s.xray_error %}<br><small class="pill pill-bad" title="{{ s.xray_error }}">Rejected by Xray</small>{% endif %}
           {% if s.tags %}<br><small class="muted" dir="auto"><bdi>{{ s.tags }}</bdi></small>{% endif %}
         </td>
-        <td>{% if not s.is_active %}<span class="pill">Inactive</span>{% else %}<span class="status-dot {{ row.status }}"></span>{{ row.status|status_label }}{% endif %}</td>
-        <td><span class="chip">{{ s.protocol|upper }}</span> <span class="chip">{{ s.transport }}</span> <span class="chip">{{ s.security }}</span></td>
+        <td class="col-status">{% if not s.is_active %}<span class="pill">Inactive</span>{% else %}<span class="status-dot {{ row.status }}"></span>{{ row.status|status_label }}{% endif %}{% if s.is_active and not row.loaded %}<div><small class="pill pill-warn">Not loaded</small></div>{% endif %}</td>
+        <td><span class="chip">{{ s.protocol|upper }} · {{ s.transport }}{% if s.security and s.security != 'none' %} · {{ s.security }}{% endif %}</span></td>
         <td class="num">{{ row.latency|ms }}</td>
         <td class="num">{{ row.uptime|percent }}</td>
-        <td class="num">{{ s.socks_port or '—' }}{% if s.is_active and not row.loaded %} <small class="pill pill-warn">Not loaded</small>{% endif %}</td>
+        <td class="num">{{ s.socks_port or '—' }}</td>
         <td>
-          <button type="button" class="btn btn-sm" data-toggle="is_active" data-id="{{ s.id }}">{{ 'Active' if s.is_active else 'Inactive' }}</button>
-          <button type="button" class="btn btn-sm" data-toggle="is_public" data-id="{{ s.id }}" title="Show on the public page">
-            <svg class="ic"><use href="#i-{{ 'eye' if s.is_public else 'eye-off' }}"/></svg></button>
+          <button type="button" class="btn btn-sm btn-icon{{ '' if s.is_active else ' is-off' }}" data-toggle="is_active" data-id="{{ s.id }}" aria-pressed="{{ 'true' if s.is_active else 'false' }}" aria-label="{{ 'Active' if s.is_active else 'Inactive' }}" title="{{ 'Active' if s.is_active else 'Inactive' }}"><svg class="ic" aria-hidden="true"><use href="#i-power"/></svg></button>
+          <button type="button" class="btn btn-sm btn-icon" data-toggle="is_public" data-id="{{ s.id }}" title="Show on the public page" aria-label="Show on the public page">
+            <svg class="ic" aria-hidden="true"><use href="#i-{{ 'eye' if s.is_public else 'eye-off' }}"/></svg></button>
         </td>
-        <td class="actions">
-          <button type="button" class="btn btn-sm" data-move="up" aria-label="Move up"><svg class="ic"><use href="#i-up"/></svg></button>
-          <button type="button" class="btn btn-sm" data-move="down" aria-label="Move down"><svg class="ic"><use href="#i-down"/></svg></button>
-          <button type="button" class="btn btn-sm" data-test="{{ s.id }}"><svg class="ic"><use href="#i-play"/></svg>Test now</button>
-          <span class="test-result" data-result-for="{{ s.id }}"></span>
-          <a class="btn btn-sm" href="{{ admin_url('/servers/' ~ s.id ~ '/edit') }}" aria-label="Edit"><svg class="ic"><use href="#i-edit"/></svg></a>
+        <td class="actions"><span class="row-actions">
+          <button type="button" class="btn btn-sm btn-icon" data-test="{{ s.id }}" aria-label="Test" title="Test"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></button>
+          <span class="test-mark" data-result-for="{{ s.id }}" hidden></span>
+          <a class="btn btn-sm btn-icon" href="{{ admin_url('/servers/' ~ s.id ~ '/edit') }}" aria-label="Edit" title="Edit"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></a>
           {% if s.xray_error %}
-          <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/retry') }}" style="display:inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn btn-sm" type="submit">Try again</button>
+          <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/retry') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn btn-sm btn-icon" type="submit" aria-label="Try again" title="Try again"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
           </form>
           {% endif %}
-          <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/delete') }}" style="display:inline" data-confirm="Delete {{ s.name|bidi }} and its history?">
+          <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/delete') }}" data-confirm="Delete {{ s.name|bidi }} and its history?">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button class="btn btn-sm btn-danger" type="submit" aria-label="Delete"><svg class="ic"><use href="#i-trash"/></svg></button>
+            <button class="btn btn-sm btn-icon btn-danger" type="submit" aria-label="Delete" title="Delete"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></button>
           </form>
-        </td>
+        </span></td>
       </tr>
     {% else %}
       <tr><td colspan="10" class="muted">No servers yet.</td></tr>

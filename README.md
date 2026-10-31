@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/MoonlessWanderer/v2uptime/main/inst
 Offline install: on a machine that has internet, download `v2uptime-<version>-linux-amd64.tar.gz` (or `arm64`) from Releases, copy it to the server, and run:
 
 ```bash
-sudo bash install.sh --from-archive ./v2uptime-v1.4.3-linux-amd64.tar.gz
+sudo bash install.sh --from-archive ./v2uptime-v1.4.4-linux-amd64.tar.gz
 ```
 
 GitHub Actions (`.github/workflows/release.yml`) builds those archives for each release, with wheels for CPython 3.10–3.13. Apt packages (nginx, certbot, python3-venv) are not inside the archive. In an offline install they still come from an apt mirror (`--apt-mirror`).
@@ -80,7 +80,7 @@ When GitHub is not reachable directly, the download (and pip) can go through a h
 Update from an offline archive:
 
 ```bash
-sudo v2uptime --from-archive ./v2uptime-v1.4.3-linux-amd64.tar.gz
+sudo v2uptime --from-archive ./v2uptime-v1.4.4-linux-amd64.tar.gz
 ```
 
 Then choose **2) Update**.
@@ -165,7 +165,7 @@ Settings live in the database and can be changed in the admin panel without a re
 |---|---|
 | Site title | Server Status |
 | Site description | Real-time connection quality of our servers |
-| Test location | empty (the line is hidden) |
+| Test location | empty (shown in Telegram reports) |
 | Timezone | Asia/Tehran |
 | Check interval | 60 seconds |
 | N (failures before an incident) | 3 |
@@ -200,7 +200,7 @@ When a check of a domain server fails, the panel resolves that name with the sam
 
 Settings → General → **Public page language** (`en` or `fa`, default English) is the only thing that chooses the language. The page, `/partials/live`, and the public error page use it. A `?lang=` link does not change it, and a `lang` cookie is not stored.
 
-Persian title, description, and test location are optional (`site_title_fa`, `site_description_fa`, `test_location_fa`). An empty one shows the main text. Dates stay Gregorian, digits stay `0-9`, and the clock stays 24-hour. The status bar and the ping chart stay left-to-right. The admin panel, the bot, the CLI, and the API stay English.
+Persian title and description are optional (`site_title_fa`, `site_description_fa`). An empty one shows the main text. Dates stay Gregorian, digits stay `0-9`, and the clock stays 24-hour. The status bar and the ping chart stay left-to-right. The admin panel, the bot, the CLI, and the API stay English.
 
 ![Persian status page](docs/screenshots/status-page-fa.jpg)
 
@@ -232,7 +232,7 @@ The add form takes share links (`vless://`, `vmess://`, `trojan://`, `ss://`), s
 
 On the server list, checkboxes select rows (Select all covers the rows on screen). **Make public** and **Make hidden** set that flag. **Delete** asks for confirmation, and for more than 20 servers the count has to be typed. One request applies the change, and Xray is updated once.
 
-The app listens on `127.0.0.1` only (nginx in front). It runs as one worker because the scheduler lives in the process. Session cookies are `HttpOnly`, `Secure` when the site is HTTPS, and `SameSite=Lax`. Forms and JSON requests need a CSRF token. Login is limited to 5 failures per 15 minutes for each IP and username. Passwords are bcrypt. A random `secret_key` is written at install. Responses send CSP and `X-Frame-Options`.
+The app listens on `127.0.0.1` only (nginx in front). It runs as one worker because the scheduler lives in the process. Session cookies are `HttpOnly`, `Secure` when the site is HTTPS, and `SameSite=Lax`. Forms and JSON requests need a CSRF token. Login allows 5 failures per 15 minutes from one IP, and 50 per username in that same window. An IP that signed in during the last 30 days is not counted toward the username limit. Changing the password clears that list. The error does not say which limit was hit. Passwords are bcrypt. A random `secret_key` is written at install. Responses send CSP and `X-Frame-Options`.
 
 ## Public API
 

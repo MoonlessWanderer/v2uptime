@@ -282,13 +282,13 @@
 
     var muted = cssVar("--muted"), grid = cssVar("--border"), color = cfg.color || cssVar("--accent");
     applyFont(this, ctx);
+    var yLabels = [];
     ctx.lineWidth = 1;
-    for (var g = step; g <= yMax + 0.001; g += step) {  // grid lines with their label inside, above the line
+    for (var g = step; g <= yMax + 0.001; g += step) {  // grid lines; labels are painted after the series
       var gy = Math.round(yAt(g)) + 0.5;
       ctx.strokeStyle = grid; ctx.globalAlpha = 0.7;
       ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
-      ctx.globalAlpha = 0.6; ctx.fillStyle = muted; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-      ctx.fillText(String(Math.round(g)), 2, gy - 2);
+      yLabels.push({ text: String(Math.round(g)), y: gy - 2 });
     }
     ctx.globalAlpha = 1;
     ctx.strokeStyle = grid;
@@ -320,6 +320,22 @@
       ctx.fillStyle = muted; ctx.textAlign = "center"; ctx.textBaseline = "middle"; applyFont(this, ctx);
       ctx.fillText("No ping data", w / 2, plotH / 2);
     }
+
+    // y labels sit on top of the line, still inside the plot, with a card-coloured backing
+    applyFont(this, ctx);
+    var surface = cssVar("--surface") || "#ffffff";
+    var labelSize = parseFloat(cssVar("--fs-xs")) || 12;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "bottom";
+    yLabels.forEach(function (label) {
+      var tw = ctx.measureText(label.text).width;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = surface;
+      ctx.fillRect(0, label.y - labelSize - 2, tw + 4, labelSize + 4);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = muted;
+      ctx.fillText(label.text, 2, label.y);
+    });
 
     // time labels under the plot; drop the ones that would collide
     applyFont(this, ctx); ctx.fillStyle = muted; ctx.textBaseline = "top";

@@ -55,36 +55,76 @@
     });
   });
 
+  function testText(r) {
+    var shown = r.ok
+      ? "OK · " + r.latency_ms + " ms" + (r.connect_ms !== null && r.connect_ms !== undefined ? " (connect " + r.connect_ms + " ms)" : "")
+      : "Failed · " + r.error;
+    return { shown: shown, title: !r.ok && r.detail ? shown + " · " + r.detail : shown };
+  }
+
   /* test now */
   document.querySelectorAll("[data-test]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var id = btn.getAttribute("data-test");
       var out = document.querySelector('[data-result-for="' + id + '"]');
+      var compact = !!(out && out.closest("#server-table"));
       btn.disabled = true;
-      out.textContent = "Testing…";
-      out.className = "test-result muted";
+      if (compact) {
+        out.hidden = false;
+        out.className = "test-mark";
+        out.textContent = "";
+        out.title = "Testing…";
+        toast("Testing…");
+      } else {
+        out.textContent = "Testing…";
+        out.className = "test-result muted";
+      }
       post(base + "/servers/" + id + "/test")
         .then(function (r) {
-          out.className = "test-result pill " + (r.ok ? "pill-ok" : "pill-bad");
-          out.textContent = r.ok
-            ? "OK · " + r.latency_ms + " ms" + (r.connect_ms !== null && r.connect_ms !== undefined ? " (connect " + r.connect_ms + " ms)" : "")
-            : "Failed · " + r.error;
-          if (!r.ok && r.detail) out.title = r.detail;
+          var text = testText(r);
+          if (compact) {
+            out.hidden = false;
+            out.className = "test-mark " + (r.ok ? "is-ok" : "is-bad");
+            out.title = text.title;
+            out.textContent = r.ok ? "ms " + r.latency_ms : "";
+            toast(text.shown);
+          } else {
+            out.className = "test-result pill " + (r.ok ? "pill-ok" : "pill-bad");
+            out.textContent = text.shown;
+            if (!r.ok && r.detail) out.title = r.detail;
+          }
         })
-        .catch(function () { out.textContent = "Error"; })
+        .catch(function () {
+          if (compact) { out.title = "Error"; out.className = "test-mark is-bad"; toast("Error"); }
+          else out.textContent = "Error";
+        })
         .then(function () { btn.disabled = false; });
     });
   });
 
-  /* ordering: drag & drop + up/down buttons */
+  /* ordering: drag, and the arrow keys on the handle */
   var table = document.getElementById("server-table");
   if (table) {
     var tbody = table.querySelector("tbody");
     var dragged = null;
+    var saveTimer = 0;
     var saveOrder = function () {
       var ids = Array.prototype.map.call(tbody.querySelectorAll("tr[data-id]"), function (tr) { return tr.getAttribute("data-id"); });
       post(base + "/servers/reorder", { ids: ids }).then(function () { toast("Order saved"); })
         .catch(function () { toast("Could not save the order"); });
+    };
+    var saveNow = function () {
+      window.clearTimeout(saveTimer);
+      saveOrder();
+    };
+    var moveRow = function (row, direction) {
+      if (direction === "up" && row.previousElementSibling) tbody.insertBefore(row, row.previousElementSibling);
+      else if (direction === "down" && row.nextElementSibling) tbody.insertBefore(row.nextElementSibling, row);
+      else return;
+      var grip = row.querySelector(".grip");
+      if (grip) grip.focus();
+      window.clearTimeout(saveTimer);
+      saveTimer = window.setTimeout(saveOrder, 600);
     };
     tbody.addEventListener("dragstart", function (e) {
       if (e.target.closest("input, button, a")) { e.preventDefault(); return; }
@@ -106,21 +146,18 @@
       e.preventDefault();
       var rect = target.getBoundingClientRect();
       tbody.insertBefore(dragged, e.clientY > rect.top + rect.height / 2 ? target.nextSibling : target);
-      saveOrder();
+      saveNow();
     });
     tbody.addEventListener("dragend", function () {
       if (dragged) dragged.classList.remove("is-dragging");
       tbody.querySelectorAll(".drop-target").forEach(function (el) { el.classList.remove("drop-target"); });
       dragged = null;
     });
-    tbody.addEventListener("click", function (e) {
-      var btn = e.target.closest("[data-move]");
-      if (!btn) return;
-      var row = btn.closest("tr");
-      if (btn.getAttribute("data-move") === "up" && row.previousElementSibling) tbody.insertBefore(row, row.previousElementSibling);
-      else if (btn.getAttribute("data-move") === "down" && row.nextElementSibling) tbody.insertBefore(row.nextElementSibling, row);
-      else return;
-      saveOrder();
+    tbody.addEventListener("keydown", function (e) {
+      var grip = e.target.closest(".grip");
+      if (!grip || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+      e.preventDefault();
+      moveRow(grip.closest("tr"), e.key === "ArrowUp" ? "up" : "down");
     });
 
     var bar = document.getElementById("bulk-bar");

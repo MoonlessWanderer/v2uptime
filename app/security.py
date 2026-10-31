@@ -59,13 +59,25 @@ def csrf_valid(request: Request, submitted: str | None) -> bool:
 
 
 class LoginLimiter:
-    """Sliding-window limit of failed logins per client IP and per username."""
+    """Sliding-window limit of failed logins.
 
-    def __init__(self, max_failures: int = 5, window_seconds: int = 900) -> None:
+    ``max_failures`` is the default ceiling. ``limits`` overrides it for a key
+    prefix (the text before the first colon), so one IP and one username can
+    have different ceilings in the same window.
+    """
+
+    def __init__(self, max_failures: int = 5, window_seconds: int = 900,
+                 limits: dict[str, int] | None = None) -> None:
         self.max_failures = max_failures
         self.window = window_seconds
+        self.limits = dict(limits or {})
         self._failures: dict[str, deque[float]] = {}
+        self._alert_at: float | None = None
         self._lock = threading.Lock()
+
+    def _ceiling(self, key: str) -> int:
+        kind, _, _ = key.partition(":")
+        return self.limits.get(kind, self.max_failures)
 
     def _recent(self, key: str, now: float) -> deque[float]:
         items = self._failures.setdefault(key, deque())
@@ -78,7 +90,7 @@ class LoginLimiter:
         now = time.monotonic()
         with self._lock:
             waits = [int(items[0] + self.window - now) + 1 for key in keys
-                     if len(items := self._recent(key, now)) >= self.max_failures]
+                     if len(items := self._recent(key, now)) >= self._ceiling(key)]
         return max(waits, default=0)
 
     def failure(self, keys: list[str]) -> None:
@@ -92,10 +104,61 @@ class LoginLimiter:
             for key in keys:
                 self._failures.pop(key, None)
 
+    def claim_security_alert(self) -> bool:
+        """True the first time in this window. Further calls wait the window out."""
+        now = time.monotonic()
+        with self._lock:
+            if self._alert_at is not None and now - self._alert_at < self.window:
+                return False
+            self._alert_at = now
+            return True
 
-login_limiter = LoginLimiter()
+
+login_limiter = LoginLimiter(limits={"user": 50})
 
 
 def client_ip(request: Request) -> str:
     # uvicorn applies X-Forwarded-For from the trusted local nginx (proxy_headers).
     return request.client.host if request.client else "unknown"
+
+
+TRUSTED_IP_DAYS = 30
+TRUSTED_IP_LIMIT = 20
+
+
+def is_trusted_ip(admin_id: int, ip: str, now: int | None = None) -> bool:
+    """True when this IP signed in for this admin during the last 30 days."""
+    from app.models import TrustedLogin
+    from app.timeutil import now_ts
+
+    now = now_ts() if now is None else now
+    row = TrustedLogin.get_or_none((TrustedLogin.admin == admin_id) & (TrustedLogin.ip == ip))
+    return bool(row and now - row.last_success <= TRUSTED_IP_DAYS * 86400)
+
+
+def remember_trusted_ip(admin_id: int, ip: str, now: int | None = None) -> None:
+    """Record a successful sign-in. Only the 20 most recent IPs are kept."""
+    from app.db import db
+    from app.models import TrustedLogin
+    from app.timeutil import now_ts
+
+    now = now_ts() if now is None else now
+    with db.atomic():
+        row = TrustedLogin.get_or_none((TrustedLogin.admin == admin_id) & (TrustedLogin.ip == ip))
+        if row is None:
+            TrustedLogin.create(admin=admin_id, ip=ip, last_success=now)
+        else:
+            row.last_success = now
+            row.save()
+        kept = [item.id for item in TrustedLogin.select(TrustedLogin.id)
+                .where(TrustedLogin.admin == admin_id)
+                .order_by(TrustedLogin.last_success.desc(), TrustedLogin.id.desc())]
+        if len(kept) > TRUSTED_IP_LIMIT:
+            TrustedLogin.delete().where(TrustedLogin.id.in_(kept[TRUSTED_IP_LIMIT:])).execute()
+
+
+def clear_trusted_ips(admin_id: int) -> None:
+    """Forget every trusted IP for this admin. Called when the password changes."""
+    from app.models import TrustedLogin
+
+    TrustedLogin.delete().where(TrustedLogin.admin == admin_id).execute()

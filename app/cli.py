@@ -88,7 +88,7 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
 
 def cmd_reset_password(args: argparse.Namespace) -> None:
     from app.models import Admin
-    from app.security import hash_password
+    from app.security import clear_trusted_ips, hash_password
     from app.timeutil import now_ts
 
     _open_db()
@@ -101,6 +101,7 @@ def cmd_reset_password(args: argparse.Namespace) -> None:
     admin.password_hash = hash_password(_read_password(args.password_stdin))
     admin.password_changed_at = max(now_ts(), admin.password_changed_at + 1)  # logs out every session
     admin.save()
+    clear_trusted_ips(admin.id)
     print(f"Password of '{args.username}' changed.")
 
 

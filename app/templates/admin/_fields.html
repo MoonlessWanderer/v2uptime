@@ -1,6 +1,6 @@
 {% macro field(d, value, masked="", servers=None) %}
 {% set ltr = d.kind in ("url", "path", "tz", "chat_ids", "secret", "time", "dns") %}
-{% set user_text = d.key in ("site_title", "site_description", "test_location", "site_title_fa", "site_description_fa", "test_location_fa") %}
+{% set user_text = d.key in ("site_title", "site_description", "test_location", "site_title_fa", "site_description_fa") %}
 <div class="field{{ ' full' if d.kind in ('text', 'multi') }}">
   {% if d.kind == "bool" %}
     <label class="check"><input type="checkbox" name="{{ d.key }}" value="1" {{ 'checked' if value }}> {{ d.label }}</label>

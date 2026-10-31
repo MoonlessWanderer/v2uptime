@@ -116,15 +116,26 @@ def test_only_the_setting_chooses_the_language(client):
     assert 'class="card-range">1h<svg' in english.text
 
 
-def test_persian_footer_and_stat_values_stay_isolated(client):
+def test_public_page_hides_location_and_footer(client):
+    make_server("Alpha", port=24121, public=True)
+    settings.set("test_location", "Tehran")
+    settings.set("public_language", "en")
+    page = client.get("/").text
+    assert "<footer" not in page
+    assert "Test location" not in page and "Last check:" in page
+    check = page[page.find("check-line"):page.find("check-line") + 500]
+    assert "Tehran" not in check
+    assert client.get("/api/status").json()["site"]["location"] == "Tehran"
+    settings.set("public_language", "fa")
+    persian = client.get("/").text
+    assert "<footer" not in persian and "محل تست" not in persian and "آخرین بررسی:" in persian
+
+
+def test_persian_stat_values_stay_isolated(client):
     make_server("Alpha", port=24112, public=True)
     settings.set("public_language", "fa")
     page = client.get("/").text
-    assert "زمان‌ها به وقت" in page
-    match = re.search(r'<bdi dir="ltr">([^<]+)</bdi>', page)
-    assert match, page
-    zone = match.group(1)
-    assert zone.startswith("UTC+") and "(" in zone and zone.endswith(")")
+    assert "<footer" not in page
     assert 'class="num" data-stat="ping"' in page
     assert 'class="num" data-stat="uptime"' in page
     assert 'class="num" data-stat="incidents"' in page
@@ -134,22 +145,22 @@ def test_optional_persian_text_falls_back_when_empty(client):
     make_server("Alpha", port=24111, public=True)
     settings.set("site_title_fa", "وضعیت سرورها")
     settings.set("site_description_fa", "")
-    settings.set("test_location_fa", "تهران")
     settings.set("test_location", "Office")
     settings.set("public_language", "fa")
     persian = client.get("/").text
-    assert "وضعیت سرورها" in persian and "تهران" in persian
+    assert "وضعیت سرورها" in persian
+    assert "محل تست" not in persian and "Office" not in persian
     assert "Real-time connection quality of our servers" in persian
     settings.set("public_language", "en")
     english = client.get("/").text
-    assert "وضعیت سرورها" not in english and "تهران" not in english
-    assert "Office" in english
+    assert "وضعیت سرورها" not in english
+    assert "Test location" not in english and "Office" not in english
 
     settings.set("site_title_fa", "")
-    settings.set("test_location_fa", "")
     settings.set("public_language", "fa")
     fallback = client.get("/").text
-    assert "Server Status" in fallback and "Office" in fallback
+    assert "Server Status" in fallback
+    assert "Office" not in fallback
 
 
 def test_public_error_follows_the_language_and_admin_does_not(client):

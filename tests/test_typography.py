@@ -34,7 +34,6 @@ FAMILIES = """() => {
         uptime: document.querySelector('[data-stat="uptime"]'),
         pingStat: document.querySelector('[data-stat="ping"]'),
         incidents: document.querySelector('[data-stat="incidents"]'),
-        footer: document.querySelector("footer"),
         range: document.querySelector(".range-seg .seg"),
         tooltip: tooltip,
     };
