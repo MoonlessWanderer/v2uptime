@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.4.2
+
+- An open 1h chart no longer adds an empty point for the minute that has not been checked yet. A check that already landed in the current minute still shows.
+- Fastest and Most stable keep the same text size when selected. The active tab is only a different background.
+- A server that was just added sorts on Fastest as soon as it has a ping, and on Most stable once two checks can measure jitter.
+
 ## 1.4.1
 
 - The public page no longer has a server search box. Sorting stays.

@@ -16,7 +16,8 @@ Definitions (documented in README):
 
   where ``uptime_24h`` is a fraction (0..1).
 * Servers with fewer than ``MIN_CHECKS_FOR_RANKING`` valid checks in 24h are
-  "collecting data" and excluded from rankings.
+  labeled "collecting data". They still join Fastest once a ping exists, and
+  Most stable once two pings make a jitter. One ping is not a stability score.
 """
 
 from __future__ import annotations
@@ -172,15 +173,23 @@ class ServerMetrics:
 
 
 def rank_fastest(metrics: Iterable[ServerMetrics]) -> list[int]:
-    """Online servers with enough data, by 1h median latency."""
-    eligible = [m for m in metrics if m.status == ONLINE and not m.collecting and m.median_1h is not None]
+    """Online servers, and new ones that already have a ping, by 1h median."""
+    eligible = [m for m in metrics if _ranks_on_speed(m)]
     eligible.sort(key=lambda m: (m.median_1h, -(m.stability or 0), m.server_id))
     return [m.server_id for m in eligible]
 
 
+def _ranks_on_speed(m: ServerMetrics) -> bool:
+    if m.median_1h is None or m.status in (OFFLINE, DEGRADED):
+        return False
+    # A settled server with no recent check stays out. A new one is still
+    # "unknown" until the second check, but the ping on the card is real.
+    return m.status == ONLINE or m.collecting
+
+
 def rank_stable(metrics: Iterable[ServerMetrics]) -> list[int]:
-    """Servers with enough data, by 24h stability score."""
-    eligible = [m for m in metrics if not m.collecting and m.stability is not None]
+    """Servers with a stability score, highest first."""
+    eligible = [m for m in metrics if m.stability is not None]
     eligible.sort(key=lambda m: (-(m.stability or 0), m.median_1h if m.median_1h is not None else math.inf,
                                  m.server_id))
     return [m.server_id for m in eligible]
@@ -305,6 +314,27 @@ def _bucket_medians(buckets: list[Bucket], samples: Iterable[tuple[int, int]]) -
         if 0 <= index < len(buckets) and ts < buckets[index].end:
             groups[index].append(int(latency))
     return [_round(median(group), 0) if group else None for group in groups]
+
+
+def _history_slots(range_key: str, buckets: list[Bucket], server_id: int):
+    """Bar counts for ``buckets``, plus per-cell median ping on the raw ranges."""
+    series = bar_counts(range_key, buckets, server_id).get(server_id) or [Counts() for _ in buckets]
+    medians = None
+    if range_key in _RAW_RANGES:
+        samples = db.execute_sql(
+            "SELECT checked_at, latency_ms FROM checks "
+            "WHERE server_id = ? AND checked_at >= ? AND latency_ms IS NOT NULL",
+            [server_id, buckets[0].start]).fetchall()
+        medians = _bucket_medians(buckets, samples)
+    return series, medians
+
+
+def _slot_empty(series: list[Counts], medians: list[int | None] | None) -> bool:
+    """True when the last cell has no check and no ping."""
+    if not series:
+        return False
+    latency = medians[-1] if medians is not None else None
+    return series[-1].valid == 0 and latency is None
 
 
 def bucketize(buckets: list[Bucket], rows: Iterable[tuple[int, int, Counts]]) -> dict[int, list[Counts]]:
@@ -478,7 +508,12 @@ class StatsService:
             m.uptime_30d = c30.get(sid, Counts()).uptime
             m.valid_24h = day.valid
             m.jitter_24h = day.jitter
-            m.stability = stability_score(day.uptime, day.jitter) if not m.collecting else None
+            # One success has no jitter. Scoring it as zero jitter would put a
+            # brand-new server at the top of Most stable.
+            if day.jitter is not None or not m.collecting:
+                m.stability = stability_score(day.uptime, day.jitter)
+            else:
+                m.stability = None
             m.incidents_24h = inc24[sid].count if sid in inc24 else 0
             result[sid] = m
         return result
@@ -566,14 +601,15 @@ class StatsService:
         server = Server.get_by_id(server_id)
         # One chart point per status-bar cell, on the same slot.
         buckets = make_buckets(range_key, now, tz)
-        series = bar_counts(range_key, buckets, server_id).get(server_id) or [Counts() for _ in buckets]
-        medians = None
-        if range_key in _RAW_RANGES:
-            samples = db.execute_sql(
-                "SELECT checked_at, latency_ms FROM checks "
-                "WHERE server_id = ? AND checked_at >= ? AND latency_ms IS NOT NULL",
-                [server_id, buckets[0].start]).fetchall()
-            medians = _bucket_medians(buckets, samples)
+        series, medians = _history_slots(range_key, buckets, server_id)
+        # The last 1h cell is the minute that is still open, so it runs up to a
+        # minute past the last check. Until a check lands there it is a point
+        # with no data. Slide back one minute; a minute that already has a
+        # check stays, including a check from a few seconds ago.
+        if range_key == "1h" and _slot_empty(series, medians):
+            step = BAR_SPEC["1h"][1]
+            buckets = [Bucket(b.start - step, b.end - step) for b in buckets]
+            series, medians = _history_slots(range_key, buckets, server_id)
         bar_starts = [i.started_at for i in incidents_overlapping(buckets[0].start, now, server_id)]
         bars = [{"start": iso_utc(b.start), "end": iso_utc(b.end), **item}
                 for b, item in zip(buckets, bar_items(buckets, series, bar_starts))]

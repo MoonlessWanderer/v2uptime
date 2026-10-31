@@ -46,9 +46,6 @@
     var key = state.tab === "fastest" ? "data-rank-fastest" : state.tab === "stable" ? "data-rank-stable" : "data-order";
     var rows = Array.prototype.slice.call(ul.children);
     rows.sort(function (a, b) {
-      var ca = a.getAttribute("data-collecting") === "1" ? 1 : 0;
-      var cb = b.getAttribute("data-collecting") === "1" ? 1 : 0;
-      if (ca !== cb) return ca - cb;
       var ra = parseInt(a.getAttribute(key), 10), rb = parseInt(b.getAttribute(key), 10);
       return (isNaN(ra) ? 1e9 : ra) - (isNaN(rb) ? 1e9 : rb);
     });

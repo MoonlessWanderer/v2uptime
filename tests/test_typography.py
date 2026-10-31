@@ -88,6 +88,13 @@ MARKS = """() => {
     return {ping: read(".card-ping")};
 }"""
 
+TAB_BOXES = """() => ["all", "fastest", "stable"].map((name) => {
+    const el = document.querySelector('[data-tab="' + name + '"]');
+    const style = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    return {name, w: box.width, h: box.height, size: style.fontSize, weight: style.fontWeight};
+})"""
+
 
 def _port() -> int:
     with socket.socket() as sock:
@@ -163,12 +170,16 @@ def test_type_is_shared_across_languages_and_the_admin_panel(panel):
                 assert info["loaded"]
             _assert_scale(page)
             marks = page.evaluate(MARKS)
+            tabs = page.evaluate(TAB_BOXES)
             page.locator('[data-tab="fastest"]').click()
             assert page.evaluate(MARKS) == marks
+            assert page.evaluate(TAB_BOXES) == tabs
             page.locator('[data-tab="stable"]').click()
             assert page.evaluate(MARKS) == marks
+            assert page.evaluate(TAB_BOXES) == tabs
             page.locator('[data-tab="all"]').click()
             assert page.evaluate(MARKS) == marks
+            assert page.evaluate(TAB_BOXES) == tabs
 
         page.goto(panel + "/admin/login")
         page.fill("#username", "admin")

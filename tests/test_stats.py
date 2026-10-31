@@ -52,16 +52,18 @@ def m(sid, status=ONLINE, median=100.0, stability=90.0, valid=100):
     return ServerMetrics(sid, status=status, median_1h=median, stability=stability, valid_24h=valid)
 
 
-def test_rank_fastest_only_online_with_data():
+def test_rank_fastest_includes_a_new_server_with_a_ping():
     metrics = [m(1, median=300), m(2, median=100), m(3, status=DEGRADED, median=50),
-               m(4, median=10, valid=3), m(5, status=OFFLINE, median=5)]
-    assert rank_fastest(metrics) == [2, 1]
+               m(4, median=10, valid=3), m(5, status=OFFLINE, median=5),
+               m(6, status=UNKNOWN, median=8, valid=1),
+               m(7, status=UNKNOWN, median=1, valid=20)]
+    assert rank_fastest(metrics) == [6, 4, 2, 1]
 
 
-def test_rank_stable_excludes_collecting():
+def test_rank_stable_uses_a_score_from_a_new_server():
     metrics = [m(1, stability=80), m(2, stability=95, status=DEGRADED), m(3, stability=99, valid=2),
-               m(4, stability=None)]
-    assert rank_stable(metrics) == [2, 1]
+               m(4, stability=None, valid=1)]
+    assert rank_stable(metrics) == [3, 2, 1]
 
 
 def test_bar_levels():
@@ -199,6 +201,52 @@ def test_1h_point_is_the_same_slot_as_its_bar_cell(database):
     cell = next(item for item in history["bars"] if item["start"] == iso_utc(slot))
     assert point["latency"] == 80  # mean of 80, 80, 400 would be 187
     assert point["uptime"] == cell["uptime"]
+
+
+def test_1h_drops_the_open_minute_until_a_check_lands_in_it(database):
+    from app.models import Check
+    from app.timeutil import iso_utc
+
+    now = now_ts()
+    minute = (now // 60) * 60
+    waiting = make_server("Waiting", port=20223)
+    Check.create(server=waiting, checked_at=minute - 20, status="ok", latency_ms=55)
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(waiting.id, "1h")
+    assert len(history["points"]) == 60 == len(history["bars"])
+    assert history["bars"][-1]["end"] == iso_utc(minute)
+    assert history["points"][-1]["latency"] == 55
+    assert history["points"][-1]["checks"] == 1
+    assert history["points"][-2]["checks"] == 0
+
+    landed = make_server("Landed", port=20224)
+    Check.create(server=landed, checked_at=now, status="ok", latency_ms=42)
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(landed.id, "1h")
+    assert history["bars"][-1]["end"] == iso_utc(minute + 60)
+    assert history["points"][-1]["latency"] == 42
+    assert history["points"][-1]["checks"] == 1
+
+
+def test_a_new_server_sorts_once_it_has_a_ping(database):
+    now = now_ts()
+    fast = make_server("Fast", port=20231)
+    slow = make_server("Slow", port=20232)
+    once = make_server("Once", port=20233)
+    add_checks(fast, now - 120, "oo", latency=40)
+    add_checks(slow, now - 120, "oo", latency=200)
+    add_checks(once, now - 60, "o", latency=15)
+    live = LiveRegistry()
+    live.add(fast.id, LivePoint(now - 120, "ok", 40))
+    live.add(fast.id, LivePoint(now - 60, "ok", 40))
+    live.add(slow.id, LivePoint(now - 120, "ok", 200))
+    live.add(slow.id, LivePoint(now - 60, "ok", 200))
+    live.add(once.id, LivePoint(now - 60, "ok", 15))
+    stats = StatsService(live, lambda sid: False)
+    order = stats.public_status("24h")["order"]
+    assert order["fastest"] == [once.id, fast.id, slow.id]
+    assert order["stable"] == [fast.id, slow.id]
+    metrics = stats.server_metrics()
+    assert metrics[once.id].stability is None
+    assert metrics[fast.id].stability is not None
 
 
 def test_history_payload(database):

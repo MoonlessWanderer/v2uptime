@@ -197,6 +197,7 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .public .seg { color: var(--muted); }
 .seg:hover { text-decoration: none; color: var(--text); }
 .seg.is-active { background: var(--surface); color: var(--text); font-weight: 600; }
+.public .seg.is-active { font-weight: 400; }
 
 /* ------------------------------------------------------------------ summary */
 .summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
