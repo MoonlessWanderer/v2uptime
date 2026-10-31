@@ -19,16 +19,16 @@
       <span class="card-line card-sub">
         <span class="card-state"><span class="status-dot{% if not s.collecting %} {{ s.status }}{% endif %}"></span>
           {%- if s.collecting %}<strong>{{ label }}</strong> · {{ t('collecting') }}
-          {%- elif s.status == 'offline' %}<strong>{% if lang == 'fa' and incident and not incident.ended_at %}<bdi>{{ incident.duration_seconds|duration(true) }}</bdi> {{ label }}{% elif incident and not incident.ended_at %}{{ label }} {{ t('for') }} <bdi>{{ incident.duration_seconds|duration(true) }}</bdi>{% else %}{{ label }}{% endif %}</strong> · <span class="card-up num"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}
+          {%- elif s.status == 'offline' %}<strong>{% if lang == 'fa' and incident and not incident.ended_at %}<bdi>{{ incident.duration_seconds|duration(true) }}</bdi> {{ label }}{% elif incident and not incident.ended_at %}{{ label }} {{ t('for') }} <bdi>{{ incident.duration_seconds|duration(true) }}</bdi>{% else %}{{ label }}{% endif %}</strong>
           {%- elif s.uptime_24h is none %}<strong>{{ label }}</strong> · {{ t('no_checks') }}
-          {%- else %}<strong>{{ label }}</strong> · <span class="card-up num"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}{% endif -%}
+          {%- else %}<strong>{{ label }}</strong>{% endif -%}
         </span>
-        <span class="card-range">{{ t('range_24h') }}<svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></span>
+        <span class="card-range">{{ t('range_1h') }}<svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></span>
       </span>
     </button>
     <div class="bars card-bars" dir="ltr" role="img" aria-label="{{ t('aria_bars') }}">
-      {%- for b in s.bars -%}
-      <i class="b lv-{{ b.level }}" data-u="{{ b.uptime if b.uptime is not none else '' }}"></i>
+      {%- for cell in s.hour -%}
+      <i class="b lv-{{ cell.level }}"{% if cell.at %} data-t="{{ cell.at }}" data-s="{{ cell.status }}"{% if cell.ms is not none %} data-ms="{{ cell.ms }}"{% endif %}{% endif %}></i>
       {%- endfor -%}
     </div>
     <div class="card-detail" id="detail-{{ s.id }}" hidden>

@@ -32,6 +32,7 @@ EN: dict[str, str] = {
     "stat_uptime": "Uptime",
     "stat_ping": "Avg ping",
     "stat_incidents": "Incidents",
+    "range_1h": "1h",
     "range_24h": "24h",
     "range_7d": "7d",
     "range_30d": "30d",
@@ -39,7 +40,7 @@ EN: dict[str, str] = {
     "range_long_24h": "24 hours",
     "range_long_7d": "7 days",
     "range_long_30d": "30 days",
-    "aria_bars": "Status for the last 24 hours",
+    "aria_bars": "Status for the last hour",
     "aria_bars_range": "Status for the selected range",
     "aria_chart": "Ping chart",
     "down_since": "Down since",
@@ -66,6 +67,7 @@ EN: dict[str, str] = {
     "tip_nodata": "no data",
     "tip_uptime": "{value} uptime",
     "tip_noping": "no ping",
+    "tip_fail": "down",
     "aria_status": "Status for the last {range}",
     "aria_ping": "Ping over the last {range}, average {ms} ms",
     "aria_ping_empty": "Ping over the last {range}, no data",
@@ -83,7 +85,7 @@ EN: dict[str, str] = {
     "sum_on_none": "{n} of {total} server are online",
 }
 
-# The switch label is the only Persian word a visitor sees on the English page.
+# Persian is rendered only when the admin setting is fa. The English page uses EN.
 FA: dict[str, str] = {
     "theme": "تغییر رنگ",
     "language": "زبان",
@@ -111,6 +113,7 @@ FA: dict[str, str] = {
     "stat_uptime": "آپتایم",
     "stat_ping": "میانگین پینگ",
     "stat_incidents": "قطعی‌ها",
+    "range_1h": "1 ساعت",
     "range_24h": "24 ساعت",
     "range_7d": "7 روز",
     "range_30d": "30 روز",
@@ -118,7 +121,7 @@ FA: dict[str, str] = {
     "range_long_24h": "24 ساعت",
     "range_long_7d": "7 روز",
     "range_long_30d": "30 روز",
-    "aria_bars": "وضعیت 24 ساعت اخیر",
+    "aria_bars": "وضعیت 1 ساعت اخیر",
     "aria_bars_range": "وضعیت بازه انتخاب‌شده",
     "aria_chart": "نمودار پینگ",
     "down_since": "قطع از",
@@ -145,6 +148,7 @@ FA: dict[str, str] = {
     "tip_nodata": "بدون داده",
     "tip_uptime": "{value} آپتایم",
     "tip_noping": "بدون پینگ",
+    "tip_fail": "قطع",
     "aria_status": "وضعیت {range} اخیر",
     "aria_ping": "پینگ {range} اخیر، میانگین {ms} ms",
     "aria_ping_empty": "پینگ {range} اخیر، بدون داده",
@@ -166,8 +170,8 @@ JS_KEYS = (
     "dur_d", "dur_h", "dur_m", "dur_s", "dur_join",
     "ago_just", "ago_m", "ago_h", "ago_d",
     "axis_24h", "axis_now", "axis_today",
-    "range_long_24h", "range_long_7d", "range_long_30d",
-    "tip_nodata", "tip_uptime", "tip_noping",
+    "range_long_24h", "range_long_7d", "range_long_30d", "range_1h",
+    "tip_nodata", "tip_uptime", "tip_noping", "tip_fail",
     "aria_status", "aria_ping", "aria_ping_empty", "aria_chart", "aria_bars_range",
 )
 

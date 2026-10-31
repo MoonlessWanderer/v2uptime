@@ -132,9 +132,39 @@ def test_public_status_hides_sensitive_and_hidden(database):
     card = payload["servers"][0]
     assert card["status"] == ONLINE and card["uptime_24h"] == 100
     assert len(card["bars"]) == 48 and card["bars"][-1]["level"] == "up"
+    assert len(card["hour"]) == 60
+    assert card["hour"][0] == {"level": "none", "at": None, "status": None, "ms": None}
+    assert sum(cell["at"] is not None for cell in card["hour"]) == 20
+    assert card["hour"][-1]["level"] == "up" and card["hour"][-1]["status"] == "ok"
     assert payload["summary"]["online"] == 1
     assert payload["order"]["fastest"] == [visible.id]
     assert hidden.id not in payload["order"]["stable"] and inactive.id not in payload["order"]["stable"]
+
+
+def test_hour_is_the_last_60_checks_oldest_first(database):
+    from app.models import Check
+    from app.timeutil import iso_utc
+
+    now = now_ts()
+    long = make_server("Long", port=20111)
+    tied = make_server("Tied", port=20112)
+    add_checks(long, now - 61, "o" * 61, step=1, latency=10)
+    Check.create(server=tied, checked_at=now - 1, status="unknown", latency_ms=None)
+    Check.create(server=tied, checked_at=now, status="ok", latency_ms=125)
+    Check.create(server=tied, checked_at=now, status="fail", latency_ms=None)
+    stats = StatsService(LiveRegistry(), lambda sid: False)
+    cards = {card["name"]: card for card in stats.public_status("24h")["servers"]}
+
+    hour = cards["Long"]["hour"]
+    assert len(hour) == 60 and all(cell["at"] for cell in hour)
+    assert hour[0]["at"] == iso_utc(now - 60) and hour[-1]["at"] == iso_utc(now - 1)
+    assert len(cards["Long"]["bars"]) == 48
+
+    hour = cards["Tied"]["hour"]
+    assert hour[:57] == [{"level": "none", "at": None, "status": None, "ms": None}] * 57
+    assert hour[57] == {"level": "none", "at": iso_utc(now - 1), "status": "unknown", "ms": None}
+    assert hour[58] == {"level": "up", "at": iso_utc(now), "status": "ok", "ms": 125}
+    assert hour[59] == {"level": "down", "at": iso_utc(now), "status": "fail", "ms": None}
 
 
 def test_history_payload(database):

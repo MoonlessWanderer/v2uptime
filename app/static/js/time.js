@@ -91,12 +91,10 @@
   }
 
   function word(key, lang) {
-    var chosen = pageLang(lang);
-    if (chosen === "fa") {
-      var value = pack()[key];
-      if (value) return value;
-    }
-    return EN[key] || key;
+    var packed = pack()[key];
+    if (pageLang(lang) === "fa" && packed) return packed;
+    if (EN[key]) return EN[key];
+    return packed || key;
   }
 
   function piece(count, suffix, lang) {

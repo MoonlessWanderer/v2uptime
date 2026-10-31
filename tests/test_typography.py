@@ -11,6 +11,7 @@ import pytest
 from app.config import Config
 from app.main import create_app
 from app.models import Admin
+from app.services.settings import settings
 from app.security import hash_password
 from app.timeutil import now_ts
 from tests.conftest import add_checks, make_server
@@ -82,7 +83,7 @@ MARKS = """() => {
         const style = getComputedStyle(el);
         return {color: style.color, weight: style.fontWeight};
     };
-    return {ping: read(".card-ping"), up: read(".card-up")};
+    return {ping: read(".card-ping")};
 }"""
 
 
@@ -145,7 +146,8 @@ def test_type_is_shared_across_languages_and_the_admin_panel(panel):
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1280, "height": 900})
         for lang in ("en", "fa"):
-            page.goto(panel + "/?lang=" + lang)
+            settings.set("public_language", lang)
+            page.goto(panel + "/")
             page.wait_for_selector(".card")
             page.evaluate("() => document.documentElement.classList.remove('flags-polyfill')")
             _open(page)

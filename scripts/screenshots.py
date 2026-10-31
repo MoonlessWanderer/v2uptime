@@ -293,7 +293,9 @@ def take_screenshots(browser, panel: Panel) -> None:
 
     persian = browser.new_context(viewport={"width": 1280, "height": 800}, color_scheme="dark")
     page = persian.new_page()
-    page.goto(panel.url + "/?lang=fa")
+    from app.services.settings import settings
+    settings.set("public_language", "fa")
+    page.goto(panel.url + "/")
     settle(page)
     open_card(page, panel.ids["🇩🇪 Germany | Reality"])
     save_jpeg(page, OUT_DIR / "status-page-fa.jpg", full_page=True)

@@ -14,7 +14,6 @@ from app.web import render
 router = APIRouter()
 
 LANG_COOKIE = "lang"
-LANG_MAX_AGE = 365 * 24 * 3600
 
 
 def _range(value: str | None) -> str:
@@ -22,13 +21,7 @@ def _range(value: str | None) -> str:
 
 
 def public_lang(request: Request) -> str:
-    """URL, then the visitor's cookie, then the panel default."""
-    query = request.query_params.get("lang")
-    if query in ("en", "fa"):
-        return query
-    cookie = request.cookies.get(LANG_COOKIE)
-    if cookie in ("en", "fa"):
-        return cookie
+    """The admin setting. ``?lang=`` and a ``lang`` cookie do not change it."""
     return normalize_lang(settings.get("public_language"))
 
 
@@ -46,11 +39,11 @@ def localized_status(data: dict, lang: str) -> dict:
     return view
 
 
-def remember_lang(response, request: Request, lang: str):
-    """Store the language when the visitor chose it with ?lang=."""
-    if request.query_params.get("lang") in ("en", "fa"):
-        response.set_cookie(
-            LANG_COOKIE, lang, max_age=LANG_MAX_AGE, path="/",
+def clear_lang_cookie(response, request: Request):
+    """Drop a leftover ``lang`` cookie. Nothing writes a new one."""
+    if LANG_COOKIE in request.cookies:
+        response.delete_cookie(
+            LANG_COOKIE, path="/",
             secure=request.app.state.config.cookie_secure, samesite="lax",
         )
     return response
@@ -75,18 +68,16 @@ def _context(request: Request, data: dict, range_key: str) -> dict:
 async def index(request: Request, range: str | None = None):
     # The list is always the last 24 hours. ?range= is echoed for older clients and tests.
     data = await _payload(request, "24h")
-    lang = public_lang(request)
     response = render(request, "public/index.html", _context(request, data, _range(range)))
-    return remember_lang(response, request, lang)
+    return clear_lang_cookie(response, request)
 
 
 @router.get("/partials/live", response_class=HTMLResponse)
 async def live_fragment(request: Request, range: str | None = None):
     data = await _payload(request, "24h")
-    lang = public_lang(request)
     response = render(request, "public/_live.html", _context(request, data, _range(range)))
     response.headers["Cache-Control"] = "no-store"
-    return remember_lang(response, request, lang)
+    return clear_lang_cookie(response, request)
 
 
 @router.get("/healthz")

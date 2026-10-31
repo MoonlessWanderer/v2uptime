@@ -15,7 +15,7 @@ The public page lists each server’s status, ping, and uptime. The admin panel 
 - Add, edit, and remove servers through the Xray API while the process stays up. If a hot reload fails, Xray restarts once and the check cycle that overlapped the restart is discarded.
 - Detects when the monitor’s own internet is down (a direct reference request) and keeps those results out of uptime.
 - Incidents use an N/M rule. Flapping is detected. Incident stats include count, downtime, mean time to recover, and longest outage.
-- Public page: one card per server with its name and ping, a 24h status bar, and its status and 24h uptime. Fastest and Most stable sorting. An open card has one 24h/7d/30d control for its uptime, average ping, incident count, status bar, and ping chart; the bar and the chart share one time axis, and a pointer or finger on either shows a cursor line and the values for that slot. Light and dark theme. Refreshes every 60 seconds.
+- Public page: one card per server with its name and ping, the last 60 checks, and its status. Fastest and Most stable sorting. An open card has one 24h/7d/30d control for its uptime, average ping, incident count, status bar, and ping chart; the bar and the chart share one time axis, and a pointer or finger on either shows a cursor line and the values for that slot. Light and dark theme. Refreshes every 60 seconds.
 - Telegram bot with a durable queue. Messages go out directly, or through an online server when `api.telegram.org` is not reachable from the monitor.
 - Server names are shown exactly as written in the config, everywhere (public page, admin, Telegram, API). A flag is shown only when it is part of the name; none is added.
 - Fonts, icons, and charts are served by the app. No third-party CDN.
@@ -198,7 +198,7 @@ When a check of a domain server fails, the panel resolves that name with the sam
 
 ### Public page language
 
-Settings → General → **Public page language** (`en` or `fa`, default English). The status page header has an English / Persian switch beside the theme button. A `?lang=en` or `?lang=fa` link wins, then the `lang` cookie (one year, `SameSite=Lax`), then this default. The page is rendered in that language, and `/partials/live` uses it too, so the 60-second refresh does not switch back.
+Settings → General → **Public page language** (`en` or `fa`, default English) is the only thing that chooses the language. The page, `/partials/live`, and the public error page use it. A `?lang=` link does not change it, and a `lang` cookie is not stored.
 
 Persian title, description, and test location are optional (`site_title_fa`, `site_description_fa`, `test_location_fa`). An empty one shows the main text. Dates stay Gregorian, digits stay `0-9`, and the clock stays 24-hour. The status bar and the ping chart stay left-to-right. The admin panel, the bot, the CLI, and the API stay English.
 
@@ -238,7 +238,7 @@ The app listens on `127.0.0.1` only (nginx in front). It runs as one worker beca
 
 Read-only. Responses do not include share links, addresses, or ports. Hidden and inactive servers are omitted; asking for one by id returns 404.
 
-- `GET /api/status?range=24h|7d|30d` — summary, status, and metrics for every public server, status bars for the range, and the Fastest and Most stable order. Each server has `latency_ms` (last check) and `ping_ms` (the 10-minute median shown on the page).
+- `GET /api/status?range=24h|7d|30d` — summary, status, and metrics for every public server, status bars for the range, and the Fastest and Most stable order. Each server has `latency_ms` (last check), `ping_ms` (the 10-minute median shown on the page), and `hour`: the last 60 checks, oldest first (`{"level": "up|down|none", "at", "status", "ms"}`; a missing check is `none` and nulls). `bars` is unchanged.
 - `GET /api/servers/{id}/history?range=24h|7d|30d` — ping and uptime series, a range summary, incidents, and `bars`: the status bar for the range, built the same way as on the status page (24h: 48 half-hour cells, 7d: 42 four-hour cells, 30d: 30 days). Each cell is `{"start", "end", "level": "up|minor|major|down|none", "uptime", "checks", "incidents"}`; the 24h cells match the server's `bars` in `/api/status`.
 - `GET /healthz` — process health.
 

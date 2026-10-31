@@ -1,4 +1,4 @@
-"""Public page layout in English and Persian, including the language switch."""
+"""Public page layout in English and Persian."""
 
 import re
 import socket
@@ -10,6 +10,7 @@ import pytest
 
 from app.config import Config
 from app.main import create_app
+from app.services.settings import settings
 from tests.conftest import add_checks, make_server
 from app.timeutil import now_ts
 
@@ -98,9 +99,10 @@ def test_public_layout_in_both_languages(panel):
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
         for lang in ("en", "fa"):
+            settings.set("public_language", lang)
             for width in (360, 390, 1280):
                 page.set_viewport_size({"width": width, "height": 800})
-                page.goto(panel + "/?lang=" + lang)
+                page.goto(panel + "/")
                 page.wait_for_selector(".card")
                 assert page.locator("html").get_attribute("lang") == lang
                 _no_horizontal_scroll(page)
@@ -125,7 +127,8 @@ def test_public_layout_in_both_languages(panel):
 
         # A finger on the left of the Persian chart selects the oldest cell.
         page.set_viewport_size({"width": 390, "height": 800})
-        page.goto(panel + "/?lang=fa")
+        settings.set("public_language", "fa")
+        page.goto(panel + "/")
         page.locator(".card-name").click()
         page.wait_for_selector(".timeline:not(.is-loading)")
         box = page.locator(".timeline").bounding_box()
@@ -145,15 +148,18 @@ def test_public_layout_in_both_languages(panel):
         assert count > 2
 
         page.set_viewport_size({"width": 1280, "height": 800})
+        settings.set("public_language", "en")
         page.context.clear_cookies()
         page.goto(panel + "/")
         assert page.locator("html").get_attribute("lang") == "en"
-        page.locator('a[hreflang="fa"]').click()
+        settings.set("public_language", "fa")
+        page.goto(panel + "/")
         page.wait_for_selector("html[lang=fa]")
         page.reload()
         assert page.locator("html").get_attribute("lang") == "fa"
         fragment = page.evaluate("async () => (await fetch('/partials/live?range=24h')).text()")
         assert "جدید" in fragment or "آنلاین" in fragment or "آپتایم" in fragment
-        page.locator('a[hreflang="en"]').click()
+        settings.set("public_language", "en")
+        page.goto(panel + "/")
         page.wait_for_selector("html[lang=en]")
         browser.close()

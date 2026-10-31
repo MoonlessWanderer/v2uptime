@@ -174,10 +174,6 @@ code, .mono, input.mono, textarea.mono { font-family: ui-monospace, SFMono-Regul
 .page-top { padding: 16px 0 8px; }
 .page-top-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .page-top-actions { display: inline-flex; align-items: center; gap: 4px; }
-.lang-switch { display: inline-flex; align-items: center; gap: 2px; font-size: var(--fs-sm); font-weight: 400; }
-.lang-switch a { color: var(--muted); text-decoration: none; padding: 4px 2px; }
-.lang-switch a:hover { color: var(--text); text-decoration: none; }
-.lang-switch a.is-active { color: var(--text); }
 .page-top .fine { margin: 4px 0 0; }
 .sort-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
 .public .segmented { max-width: 100%; }

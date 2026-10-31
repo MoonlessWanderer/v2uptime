@@ -164,11 +164,6 @@
   var tipFor = null;  // the bar or timeline the tooltip belongs to
   var dragging = null;  // touch/pen: the region the finger is on
 
-  function buckets() {
-    var el = document.getElementById("bucket-meta");
-    try { return el ? JSON.parse(el.textContent) : []; } catch (e) { return []; }
-  }
-
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   function indexAt(el, clientX, n) {
@@ -222,15 +217,27 @@
     document.querySelectorAll(".timeline .cursor").forEach(function (c) { c.hidden = true; });
   }
 
-  /* Closed card: the 24h bar; tooltip above it. */
+  /* Closed card: one cell per recent check. An empty cell has no data-t. */
   function pointBar(barsEl, clientX) {
     var cells = barsEl.children, n = cells.length;
     if (!n || !T) return;
-    var i = indexAt(barsEl, clientX, n), item = buckets()[i] || {};
-    var text = iso(spanText(item.start, item.end, "24h")) + " · " + uptimeText(cells[i].getAttribute("data-u"));
+    var i = indexAt(barsEl, clientX, n), cell = cells[i];
+    var at = cell.getAttribute("data-t");
+    var text;
+    if (!at) {
+      text = T.word("tip_nodata");
+    } else {
+      var clock = iso(T.formatTime(at));
+      var status = cell.getAttribute("data-s");
+      var ping = cell.getAttribute("data-ms");
+      if (status === "fail") text = clock + " · " + T.word("tip_fail");
+      else if (status === "ok" && ping !== null && ping !== "") text = clock + " · " + iso(Math.round(Number(ping)) + " ms");
+      else if (status === "ok") text = clock + " · " + T.word("tip_noping");
+      else text = clock + " · " + T.word("tip_nodata");
+    }
     highlight(barsEl, i);
-    var t = showTip(text), cell = cells[i].getBoundingClientRect(), top = barsEl.getBoundingClientRect().top;
-    tooltip.style.left = clamp(cell.left + cell.width / 2 - t.width / 2, 8, window.innerWidth - t.width - 8) + "px";
+    var t = showTip(text), box = cells[i].getBoundingClientRect(), top = barsEl.getBoundingClientRect().top;
+    tooltip.style.left = clamp(box.left + box.width / 2 - t.width / 2, 8, window.innerWidth - t.width - 8) + "px";
     tooltip.style.top = Math.max(8, top - t.height - 8) + "px";
     tipFor = barsEl;
   }

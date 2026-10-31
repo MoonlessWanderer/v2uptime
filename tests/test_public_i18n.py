@@ -18,10 +18,6 @@ ARABIC = re.compile(r"[\u0600-\u06FF]")
 PERSIAN_DIGITS = re.compile(r"[۰-۹]")
 
 
-def _without_lang_switch(html: str) -> str:
-    return re.sub(r'<div class="lang-switch".*?</div>', "", html, count=1, flags=re.S)
-
-
 def test_every_english_key_exists_in_persian():
     missing = sorted(set(EN) - set(FA))
     assert missing == []
@@ -89,35 +85,41 @@ process.stdout.write(JSON.stringify(cases.map((c) => c.ago
     assert got[3] == "5 دقیقه پیش"
 
 
-def test_query_cookie_and_default_choose_the_language(client):
+def test_only_the_setting_chooses_the_language(client):
     make_server("Alpha", port=22001)
     settings.set("public_language", "fa")
     default = client.get("/")
     assert 'lang="fa"' in default.text and 'dir="rtl"' in default.text
     assert "آنلاین" in default.text or "جدید" in default.text
+    assert "1 ساعت" in default.text and "وضعیت 1 ساعت اخیر" in default.text
     assert not PERSIAN_DIGITS.search(default.text)
+    assert "lang=" not in default.headers.get("set-cookie", "")
 
-    chosen = client.get("/?lang=en")
-    assert 'lang="en"' in chosen.text and 'dir="ltr"' in chosen.text
-    assert ARABIC.search(_without_lang_switch(chosen.text)) is None
-    cookie = chosen.headers["set-cookie"]
-    assert "lang=en" in cookie and "samesite=lax" in cookie.lower() and "max-age=31536000" in cookie.lower()
+    ignored = client.get("/?lang=en")
+    assert 'lang="fa"' in ignored.text and 'dir="rtl"' in ignored.text
+    assert "lang=" not in ignored.headers.get("set-cookie", "")
 
-    # The cookie now says en, which beats the panel default.
+    client.cookies.set("lang", "en")
     remembered = client.get("/")
-    assert 'lang="en"' in remembered.text
+    assert 'lang="fa"' in remembered.text
+    cleared = remembered.headers["set-cookie"]
+    assert cleared.lower().startswith("lang=") and "max-age=0" in cleared.lower()
 
-    # The URL beats the cookie.
-    again = client.get("/?lang=fa")
-    assert 'lang="fa"' in again.text
     live = client.get("/partials/live")
     assert "جدید" in live.text or "آنلاین" in live.text
     assert PERSIAN_DIGITS.search(live.text) is None
 
+    settings.set("public_language", "en")
+    english = client.get("/")
+    assert 'lang="en"' in english.text and 'dir="ltr"' in english.text
+    assert ARABIC.search(english.text) is None
+    assert 'class="card-range">1h<svg' in english.text
+
 
 def test_persian_footer_and_stat_values_stay_isolated(client):
     make_server("Alpha", port=24112, public=True)
-    page = client.get("/?lang=fa").text
+    settings.set("public_language", "fa")
+    page = client.get("/").text
     assert "زمان‌ها به وقت" in page
     match = re.search(r'<bdi dir="ltr">([^<]+)</bdi>', page)
     assert match, page
@@ -134,21 +136,24 @@ def test_optional_persian_text_falls_back_when_empty(client):
     settings.set("site_description_fa", "")
     settings.set("test_location_fa", "تهران")
     settings.set("test_location", "Office")
-    persian = client.get("/?lang=fa").text
+    settings.set("public_language", "fa")
+    persian = client.get("/").text
     assert "وضعیت سرورها" in persian and "تهران" in persian
     assert "Real-time connection quality of our servers" in persian
-    english = client.get("/?lang=en").text
+    settings.set("public_language", "en")
+    english = client.get("/").text
     assert "وضعیت سرورها" not in english and "تهران" not in english
     assert "Office" in english
 
     settings.set("site_title_fa", "")
     settings.set("test_location_fa", "")
-    fallback = client.get("/?lang=fa").text
+    settings.set("public_language", "fa")
+    fallback = client.get("/").text
     assert "Server Status" in fallback and "Office" in fallback
 
 
 def test_public_error_follows_the_language_and_admin_does_not(client):
-    client.get("/?lang=fa")
+    settings.set("public_language", "fa")
     missing = client.get("/no-such-page")
     assert missing.status_code == 404
     assert 'lang="fa"' in missing.text and "صفحه پیدا نشد." in missing.text

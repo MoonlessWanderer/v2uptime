@@ -76,7 +76,7 @@ DEFINITIONS: tuple[SettingDef, ...] = (
     SettingDef("test_location", "", "str", "Test location", "general",
                "Shown under the status banner. Leave empty to hide it."),
     SettingDef("public_language", "en", "choice", "Public page language", "general",
-               "Default language of the status page. A visitor can switch it.",
+               "Language of the status page.",
                choices=(("en", "English"), ("fa", "Persian"))),
     SettingDef("site_title_fa", "", "str", "Site title (Persian)", "general",
                "Used when the status page is in Persian. Leave empty to use the main title."),

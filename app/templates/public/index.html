@@ -9,11 +9,6 @@
     <div class="page-top-row">
       <h1><bdi>{{ data.site.title }}</bdi></h1>
       <div class="page-top-actions">
-        <div class="lang-switch" role="group" aria-label="{{ t('language') }}">
-          <a href="?lang=en" hreflang="en" lang="en" {% if lang == 'en' %}class="is-active" aria-current="true"{% endif %}>{{ t('lang_en') }}</a>
-          <span aria-hidden="true">|</span>
-          <a href="?lang=fa" hreflang="fa" lang="fa" {% if lang == 'fa' %}class="is-active" aria-current="true"{% endif %}>{{ t('lang_fa') }}</a>
-        </div>
         <button class="icon-btn theme-toggle" type="button" aria-label="{{ t('theme') }}" data-theme-toggle>
           <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg>
           <svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>

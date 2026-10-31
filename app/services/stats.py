@@ -324,6 +324,48 @@ def bar_items(buckets: list[Bucket], counts: list[Counts], incident_starts: list
     } for bucket, c in zip(buckets, counts)]
 
 
+_HOUR_CHECKS = 60
+_EMPTY_HOUR = {"level": "none", "at": None, "status": None, "ms": None}
+
+
+def _check_level(status: str) -> str:
+    if status == "ok":
+        return "up"
+    if status == "fail":
+        return "down"
+    return "none"
+
+
+def recent_hour(server_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    """Last 60 checks per server, oldest first. Fewer than 60 are padded on the left.
+
+    The label on the card is the fixed text ``1h``. This is not a time window and
+    does not read ``check_interval``.
+    """
+    rows: dict[int, list[dict[str, Any]]] = {server_id: [] for server_id in server_ids}
+    if server_ids:
+        marks = ",".join("?" for _ in server_ids)
+        cursor = db.execute_sql(
+            "SELECT server_id, checked_at, status, latency_ms FROM ("
+            "SELECT server_id, id, checked_at, status, latency_ms, "
+            "ROW_NUMBER() OVER (PARTITION BY server_id ORDER BY checked_at DESC, id DESC) AS rn "
+            "FROM checks WHERE server_id IN (" + marks + ")) "
+            "WHERE rn <= ? ORDER BY checked_at ASC, id ASC",
+            [*server_ids, _HOUR_CHECKS],
+        )
+        for server_id, checked_at, status, latency in cursor.fetchall():
+            rows.setdefault(server_id, []).append({
+                "level": _check_level(status),
+                "at": iso_utc(checked_at),
+                "status": status,
+                "ms": latency,
+            })
+    return {
+        server_id: [dict(_EMPTY_HOUR) for _ in range(_HOUR_CHECKS - len(items))] + items
+        for server_id, items in rows.items()
+    }
+
+
 def incidents_overlapping(since: int, now: int, server_id: int | None = None) -> list[Incident]:
     query = Incident.select().where(Incident.started_at < now,
                                     Incident.ended_at.is_null() | (Incident.ended_at >= since))
@@ -449,6 +491,7 @@ class StatsService:
             "start": iso_utc(b.start), "end": iso_utc(b.end),
             "label": fmt_date(b.start, tz) if range_key == "30d" else fmt_range(b.start, b.end, tz),
         } for b in buckets]
+        hours = recent_hour([server.id for server in servers])
         cards = []
         for server in servers:
             m = metrics.get(server.id) or self.live_metrics(server.id, now)
@@ -465,6 +508,7 @@ class StatsService:
                 "last_check_at": iso_utc(m.last_check_at) if m.last_check_at else None,
                 "last_check_label": fmt_datetime(m.last_check_at, tz) if m.last_check_at else None,
                 "last_incident": _last_incident(last_by_server.get(server.id), now),
+                "hour": hours[server.id],
                 "bars": bucket_items,
             })
         public_metrics = [metrics[c["id"]] for c in cards if c["id"] in metrics]

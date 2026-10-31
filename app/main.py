@@ -131,7 +131,7 @@ def create_app(cfg: Config | None = None, background: bool = True) -> FastAPI:
         response = render(request, "error.html", {"code": exc.status_code, "message": message, "lang": lang,
                                                   "dir": "rtl" if lang == "fa" else "ltr"},
                           status_code=exc.status_code)
-        return public.remember_lang(response, request, lang) if public_page else response
+        return public.clear_lang_cookie(response, request) if public_page else response
 
     return app
 
