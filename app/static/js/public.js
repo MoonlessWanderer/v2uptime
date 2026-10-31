@@ -174,6 +174,9 @@
 
   function spanText(start, end, range) {
     if (range === "30d") return T.formatMonthDay(start);
+    // A 1h cell is one minute. Its bucket ends at the next minute, so a range
+    // would read 02:05–02:06 while the closed card shows the check as 02:05.
+    if (range === "1h") return T.formatTime(start);
     var clock = T.formatTime(start) + "–" + T.formatTime(end);
     return range === "7d" ? T.formatMonthDay(start) + " " + clock : clock;
   }

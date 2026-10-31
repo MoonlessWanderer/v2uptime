@@ -227,6 +227,40 @@ def test_1h_drops_the_open_minute_until_a_check_lands_in_it(database):
     assert history["points"][-1]["latency"] == 42
     assert history["points"][-1]["checks"] == 1
 
+    # Two checks in an earlier minute, and nothing since: the chart ends on
+    # that minute, not on the empty minute after it.
+    both = make_server("Both", port=20225)
+    Check.create(server=both, checked_at=minute - 110, status="ok", latency_ms=30)
+    Check.create(server=both, checked_at=minute - 80, status="ok", latency_ms=50)
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(both.id, "1h")
+    assert history["bars"][-1]["start"] == iso_utc(minute - 120)
+    assert history["bars"][-1]["end"] == iso_utc(minute - 60)
+    assert history["points"][-1]["checks"] == 2
+    assert history["points"][-1]["latency"] == 40
+
+    # Nothing recorded: keep the clock hour, including the minute that is still open.
+    empty = make_server("Empty", port=20226)
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(empty.id, "1h")
+    assert len(history["points"]) == 60
+    assert history["bars"][-1]["end"] == iso_utc(minute + 60)
+
+    # A failure and an unknown result are checks. They stay on the newest minute.
+    failed = make_server("Failed", port=20227)
+    Check.create(server=failed, checked_at=minute - 20, status="ok", latency_ms=70)
+    Check.create(server=failed, checked_at=now, status="fail", latency_ms=None, error_type="timeout")
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(failed.id, "1h")
+    assert history["bars"][-1]["start"] == iso_utc(minute)
+    assert history["points"][-1]["checks"] == 1
+    assert history["points"][-1]["latency"] is None
+
+    outage = make_server("Outage", port=20228)
+    Check.create(server=outage, checked_at=minute - 200, status="ok", latency_ms=80)
+    Check.create(server=outage, checked_at=minute - 90, status="unknown", latency_ms=None, error_type="network")
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(outage.id, "1h")
+    assert history["bars"][-1]["start"] == iso_utc(minute - 120)
+    assert history["points"][-1]["uptime"] is None
+    assert history["points"][-1]["checks"] == 0
+
 
 def test_a_new_server_sorts_once_it_has_a_ping(database):
     now = now_ts()

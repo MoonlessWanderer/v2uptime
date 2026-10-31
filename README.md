@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/MoonlessWanderer/v2uptime/main/inst
 Offline install: on a machine that has internet, download `v2uptime-<version>-linux-amd64.tar.gz` (or `arm64`) from Releases, copy it to the server, and run:
 
 ```bash
-sudo bash install.sh --from-archive ./v2uptime-v1.4.2-linux-amd64.tar.gz
+sudo bash install.sh --from-archive ./v2uptime-v1.4.3-linux-amd64.tar.gz
 ```
 
 GitHub Actions (`.github/workflows/release.yml`) builds those archives for each release, with wheels for CPython 3.10–3.13. Apt packages (nginx, certbot, python3-venv) are not inside the archive. In an offline install they still come from an apt mirror (`--apt-mirror`).
@@ -80,7 +80,7 @@ When GitHub is not reachable directly, the download (and pip) can go through a h
 Update from an offline archive:
 
 ```bash
-sudo v2uptime --from-archive ./v2uptime-v1.4.2-linux-amd64.tar.gz
+sudo v2uptime --from-archive ./v2uptime-v1.4.3-linux-amd64.tar.gz
 ```
 
 Then choose **2) Update**.
@@ -239,7 +239,7 @@ The app listens on `127.0.0.1` only (nginx in front). It runs as one worker beca
 Read-only. Responses do not include share links, addresses, or ports. Hidden and inactive servers are omitted; asking for one by id returns 404.
 
 - `GET /api/status?range=24h|7d|30d` — summary, status, and metrics for every public server, status bars for the range, and the Fastest and Most stable order. Each server has `latency_ms` (last check), `ping_ms` (the 10-minute median shown on the page), and `hour`: the last 60 checks, oldest first (`{"level": "up|down|none", "at", "status", "ms"}`; a missing check is `none` and nulls). `bars` is unchanged.
-- `GET /api/servers/{id}/history?range=1h|24h|7d|30d` — ping and uptime series, a range summary, incidents, and `bars`. The open card requests `1h`. On that range the minute that is still open is left out until a check lands in it, so the series does not end on an empty point. Each ping point is the same cell as the status bar: 60 minutes, 48 half-hours, 42 four-hour cells, or 30 days. A 1h or 24h point is the median ping of that cell. A 7d or 30d point is the average ping of that cell. `bars` for 24h, 7d, and 30d is the status bar for the range, built the same way as on the status page (24h: 48 half-hour cells, 7d: 42 four-hour cells, 30d: 30 days). Each cell is `{"start", "end", "level": "up|minor|major|down|none", "uptime", "checks", "incidents"}`; the 24h cells match the server's `bars` in `/api/status`.
+- `GET /api/servers/{id}/history?range=1h|24h|7d|30d` — ping and uptime series, a range summary, incidents, and `bars`. The open card requests `1h`. On that range, minutes with no check after the last one are left out, so the series ends on that check's minute. A failure or an unknown result keeps its minute. Each ping point is the same cell as the status bar: 60 minutes, 48 half-hours, 42 four-hour cells, or 30 days. A 1h or 24h point is the median ping of that cell. A 7d or 30d point is the average ping of that cell. `bars` for 24h, 7d, and 30d is the status bar for the range, built the same way as on the status page (24h: 48 half-hour cells, 7d: 42 four-hour cells, 30d: 30 days). Each cell is `{"start", "end", "level": "up|minor|major|down|none", "uptime", "checks", "incidents"}`; the 24h cells match the server's `bars` in `/api/status`.
 - `GET /healthz` — process health.
 
 Responses are cached for at most 60 seconds and are invalidated after each check cycle.

@@ -94,6 +94,27 @@ def _open_and_align(page) -> None:
     assert re.fullmatch(r"\d+ ms", stats["ping"]["text"])
 
 
+def _hour_tooltip_matches_the_closed_card(page) -> None:
+    """The open 1h tip is the same minute as the newest closed-card check, not the next minute."""
+    box = page.locator(".timeline").bounding_box()
+    page.mouse.move(box["x"] + box["width"] - 6, box["y"] + 36)
+    page.wait_for_selector("#tooltip:not([hidden])")
+    compared = page.evaluate("""() => {
+        const cells = [...document.querySelectorAll('.card-bars .b')].filter((cell) => cell.dataset.t);
+        const clock = window.UptimeTime.formatTime(cells[cells.length - 1].dataset.t);
+        const tip = document.getElementById('tooltip').textContent;
+        return {tip, clock};
+    }""")
+    assert compared["clock"] in compared["tip"]
+    assert "–" not in compared["tip"].split("·")[0]
+    page.locator('.range-seg [data-range="24h"]').click()
+    page.wait_for_selector(".timeline:not(.is-loading)")
+    box = page.locator(".timeline").bounding_box()
+    page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 36)
+    page.wait_for_selector("#tooltip:not([hidden])")
+    assert "–" in page.locator("#tooltip").inner_text()
+
+
 def test_public_layout_in_both_languages(panel):
     from playwright.sync_api import sync_playwright
 
@@ -125,6 +146,8 @@ def test_public_layout_in_both_languages(panel):
                     assert edges["ping"] < 20
                     assert edges["name"] < 20
                 _open_and_align(page)
+                if lang == "en" and width == 1280:
+                    _hour_tooltip_matches_the_closed_card(page)
                 page.locator(".card-name").click()  # close before the next width
 
         # A finger on the left of the Persian chart selects the oldest cell.

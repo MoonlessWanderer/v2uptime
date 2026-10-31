@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.4.3
+
+- An open 1h cell is labeled with its own minute, the same clock as the closed card. Minutes with no check after the last one are left out. A failure or an unknown result keeps its minute.
+
 ## 1.4.2
 
 - An open 1h chart no longer adds an empty point for the minute that has not been checked yet. A check that already landed in the current minute still shows.

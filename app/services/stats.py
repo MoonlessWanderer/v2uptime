@@ -329,12 +329,20 @@ def _history_slots(range_key: str, buckets: list[Bucket], server_id: int):
     return series, medians
 
 
-def _slot_empty(series: list[Counts], medians: list[int | None] | None) -> bool:
-    """True when the last cell has no check and no ping."""
-    if not series:
-        return False
-    latency = medians[-1] if medians is not None else None
-    return series[-1].valid == 0 and latency is None
+def _trailing_empty(series: list[Counts], medians: list[int | None] | None) -> int:
+    """Minutes at the end that contain no check.
+
+    A failure or an unknown result keeps its minute, so the chart ends where the
+    closed card's newest check is. A window with no checks at all returns 0.
+    """
+    empty = 0
+    for index in range(len(series) - 1, -1, -1):
+        cell = series[index]
+        latency = medians[index] if medians is not None else None
+        if cell.valid or cell.unknown or latency is not None:
+            return empty
+        empty += 1
+    return 0
 
 
 def bucketize(buckets: list[Bucket], rows: Iterable[tuple[int, int, Counts]]) -> dict[int, list[Counts]]:
@@ -602,12 +610,12 @@ class StatsService:
         # One chart point per status-bar cell, on the same slot.
         buckets = make_buckets(range_key, now, tz)
         series, medians = _history_slots(range_key, buckets, server_id)
-        # The last 1h cell is the minute that is still open, so it runs up to a
-        # minute past the last check. Until a check lands there it is a point
-        # with no data. Slide back one minute; a minute that already has a
-        # check stays, including a check from a few seconds ago.
-        if range_key == "1h" and _slot_empty(series, medians):
-            step = BAR_SPEC["1h"][1]
+        # 1h cells run to the next minute, so the last ones can sit ahead of the
+        # last check (the minute still open, or a minute the checker has not
+        # reached). The closed card shows that check's own minute. End the
+        # chart on the same minute; a minute that already has a check stays.
+        if range_key == "1h" and (gap := _trailing_empty(series, medians)):
+            step = BAR_SPEC["1h"][1] * gap
             buckets = [Bucket(b.start - step, b.end - step) for b in buckets]
             series, medians = _history_slots(range_key, buckets, server_id)
         bar_starts = [i.started_at for i in incidents_overlapping(buckets[0].start, now, server_id)]
