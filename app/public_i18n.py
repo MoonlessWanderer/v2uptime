@@ -97,7 +97,7 @@ FA: dict[str, str] = {
     "search_label": "جستجوی سرور",
     "no_match": "سروری پیدا نشد.",
     "footer_refresh": "هر 60 ثانیه تازه می‌شود",
-    "footer_times": "زمان‌ها با",
+    "footer_times": "زمان‌ها به وقت",
     "empty": "هنوز سروری نیست.",
     "status_online": "آنلاین",
     "status_degraded": "ناپایدار",

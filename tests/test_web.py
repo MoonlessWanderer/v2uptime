@@ -409,7 +409,7 @@ def test_closed_cards_show_name_ping_bar_and_status(client):
     assert _card_state(_row(page, servers["degraded"].id)) == f"Degraded · {up['degraded']} uptime"
     assert _card_state(_row(page, servers["down"].id)) == f"Down for {down_for} · {up['down']} uptime"
     assert _card_state(_row(page, servers["new"].id)) == "New · Collecting data"
-    assert 'class="card-ping is-empty"><bdi>—</bdi></span>' in _row(page, servers["down"].id)
+    assert 'class="card-ping num is-empty"><bdi>—</bdi></span>' in _row(page, servers["down"].id)
     assert "Down since" in _row(page, servers["down"].id)
     for button in re.findall(r"<button\b.*?</button>", page, re.S):
         assert 'class="bars' not in button and 'class="timeline' not in button

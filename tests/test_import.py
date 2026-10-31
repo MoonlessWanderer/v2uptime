@@ -1,6 +1,8 @@
 """Subscription URLs are fetched once. Stored subscriptions are gone."""
 
+import asyncio
 import base64
+import time
 
 import httpx
 import pytest
@@ -249,3 +251,39 @@ def test_bulk_requires_login_and_csrf(client):
     assert client.post("/admin/servers/bulk", json={"action": "delete", "ids": [server.id]}).status_code == 401
     login(client)
     assert Server.select().count() == 1
+
+
+def test_slow_resolver_does_not_block_the_event_loop():
+    def slow(host):
+        time.sleep(2)
+        return ["1.1.1.1"]
+
+    async def run():
+        async def nap():
+            started = time.perf_counter()
+            await asyncio.sleep(0.1)
+            return time.perf_counter() - started
+
+        pending = asyncio.create_task(importer.assert_not_local("https://sub.example.com/abc", resolver=slow))
+        await asyncio.sleep(0)
+        elapsed = await nap()
+        await pending
+        assert elapsed < 0.5
+
+    asyncio.run(run())
+
+
+def test_resolve_timeout_rejects_the_host(monkeypatch):
+    monkeypatch.setattr(importer, "RESOLVE_TIMEOUT", 0.05)
+
+    def slow(host):
+        time.sleep(0.4)
+        return ["1.1.1.1"]
+
+    async def run():
+        with pytest.raises(importer.ImportError) as caught:
+            await importer.assert_not_local("https://sub.example.com/secret", resolver=slow)
+        assert caught.value.host == "sub.example.com"
+        assert caught.value.reason == "could not resolve host"
+
+    asyncio.run(run())

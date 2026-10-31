@@ -8,7 +8,9 @@
   var REFRESH_MS = 60000;
   var RANGES = ["24h", "7d", "30d"];
   var T = window.UptimeTime;
-  var ISO_L = "\u2068", ISO_R = "\u2069";
+  // LTR isolate, not first-strong: "99.86%" and "12:00–12:30" have no strong letter, so in a
+  // Persian tooltip a first-strong isolate would follow the surrounding RTL direction.
+  var ISO_L = "\u2066", ISO_R = "\u2069";
   var list = document.getElementById("live-list");
   var tooltip = document.getElementById("tooltip");
   var emptySearch = document.getElementById("empty-search");

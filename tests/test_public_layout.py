@@ -1,5 +1,6 @@
 """Public page layout in English and Persian, including the language switch."""
 
+import re
 import socket
 import threading
 import time
@@ -77,6 +78,17 @@ def _open_and_align(page) -> None:
     }""")
     assert aligned["left"] <= 1 and aligned["right"] <= 1
     assert aligned["timeline"] == "ltr" and aligned["bars"] == "ltr"
+    stats = page.evaluate("""() => {
+        const read = (name) => {
+            const el = document.querySelector('[data-stat="' + name + '"]');
+            const style = getComputedStyle(el);
+            return {text: el.innerText.trim(), bidi: style.unicodeBidi, direction: style.direction};
+        };
+        return {ping: read('ping'), uptime: read('uptime'), incidents: read('incidents')};
+    }""")
+    for name in ("ping", "uptime", "incidents"):
+        assert stats[name]["bidi"] == "isolate" and stats[name]["direction"] == "ltr"
+    assert re.fullmatch(r"\d+ ms", stats["ping"]["text"])
 
 
 def test_public_layout_in_both_languages(panel):
@@ -93,6 +105,13 @@ def test_public_layout_in_both_languages(panel):
                 assert page.locator("html").get_attribute("lang") == lang
                 _no_horizontal_scroll(page)
                 if lang == "fa":
+                    footer = page.evaluate("""() => {
+                        const el = document.querySelector('footer bdi');
+                        return {dir: el.getAttribute('dir'), text: el.innerText.trim()};
+                    }""")
+                    assert footer["dir"] == "ltr"
+                    assert footer["text"].startswith("UTC+") and "(" in footer["text"] and footer["text"].endswith(")")
+                    assert "زمان‌ها به وقت" in page.locator("footer").inner_text()
                     edges = page.evaluate("""() => {
                         const card = document.querySelector('.card').getBoundingClientRect();
                         const ping = document.querySelector('.card-ping').getBoundingClientRect();

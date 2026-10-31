@@ -262,6 +262,7 @@ def take_screenshots(browser, panel: Panel) -> None:
     page = persian.new_page()
     page.goto(panel.url + "/?lang=fa")
     settle(page)
+    open_card(page, panel.ids["🇩🇪 Germany | Reality"])
     save_jpeg(page, OUT_DIR / "status-page-fa.jpg", full_page=True)
     persian.close()
 

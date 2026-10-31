@@ -13,15 +13,15 @@
     <button type="button" class="card-main" aria-expanded="false" aria-controls="detail-{{ s.id }}">
       <span class="card-line card-top">
         <span class="card-name" title="{{ s.name }}"><bdi>{{ s.name }}</bdi></span>
-        <span class="card-ping{{ ' is-empty' if s.ping_ms is none }}"><bdi>{{ s.ping_ms|ms }}</bdi></span>
+        <span class="card-ping num{{ ' is-empty' if s.ping_ms is none }}"><bdi>{{ s.ping_ms|ms }}</bdi></span>
       </span>
       <span class="card-gap" aria-hidden="true"></span>
       <span class="card-line card-sub">
         <span class="card-state"><span class="status-dot{% if not s.collecting %} {{ s.status }}{% endif %}"></span>
           {%- if s.collecting %}<strong>{{ label }}</strong> · {{ t('collecting') }}
-          {%- elif s.status == 'offline' %}<strong>{% if lang == 'fa' and incident and not incident.ended_at %}<bdi>{{ incident.duration_seconds|duration(true) }}</bdi> {{ label }}{% elif incident and not incident.ended_at %}{{ label }} {{ t('for') }} <bdi>{{ incident.duration_seconds|duration(true) }}</bdi>{% else %}{{ label }}{% endif %}</strong> · <span class="card-up"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}
+          {%- elif s.status == 'offline' %}<strong>{% if lang == 'fa' and incident and not incident.ended_at %}<bdi>{{ incident.duration_seconds|duration(true) }}</bdi> {{ label }}{% elif incident and not incident.ended_at %}{{ label }} {{ t('for') }} <bdi>{{ incident.duration_seconds|duration(true) }}</bdi>{% else %}{{ label }}{% endif %}</strong> · <span class="card-up num"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}
           {%- elif s.uptime_24h is none %}<strong>{{ label }}</strong> · {{ t('no_checks') }}
-          {%- else %}<strong>{{ label }}</strong> · <span class="card-up"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}{% endif -%}
+          {%- else %}<strong>{{ label }}</strong> · <span class="card-up num"><bdi>{{ s.uptime_24h|percent }}</bdi></span> {{ t('uptime') }}{% endif -%}
         </span>
         <span class="card-range">{{ t('range_24h') }}<svg class="ic" aria-hidden="true"><use href="#i-down"/></svg></span>
       </span>
@@ -38,9 +38,9 @@
         <button type="button" class="seg" data-range="30d" aria-pressed="false">{{ t('range_30d') }}</button>
       </div>
       <dl class="card-stats">
-        <div><dt>{{ t('stat_uptime') }}</dt><dd data-stat="uptime">…</dd></div>
-        <div><dt>{{ t('stat_ping') }}</dt><dd data-stat="ping">…</dd></div>
-        <div><dt>{{ t('stat_incidents') }}</dt><dd data-stat="incidents">…</dd></div>
+        <div><dt>{{ t('stat_uptime') }}</dt><dd class="num" data-stat="uptime">…</dd></div>
+        <div><dt>{{ t('stat_ping') }}</dt><dd class="num" data-stat="ping">…</dd></div>
+        <div><dt>{{ t('stat_incidents') }}</dt><dd class="num" data-stat="incidents">…</dd></div>
       </dl>
       <div class="timeline is-loading" dir="ltr">
         <div class="bars range-bars" dir="ltr" role="img" aria-label="{{ t('aria_bars_range') }}"></div>

@@ -115,6 +115,19 @@ def test_query_cookie_and_default_choose_the_language(client):
     assert PERSIAN_DIGITS.search(live.text) is None
 
 
+def test_persian_footer_and_stat_values_stay_isolated(client):
+    make_server("Alpha", port=24112, public=True)
+    page = client.get("/?lang=fa").text
+    assert "زمان‌ها به وقت" in page
+    match = re.search(r'<bdi dir="ltr">([^<]+)</bdi>', page)
+    assert match, page
+    zone = match.group(1)
+    assert zone.startswith("UTC+") and "(" in zone and zone.endswith(")")
+    assert 'class="num" data-stat="ping"' in page
+    assert 'class="num" data-stat="uptime"' in page
+    assert 'class="num" data-stat="incidents"' in page
+
+
 def test_optional_persian_text_falls_back_when_empty(client):
     make_server("Alpha", port=24111, public=True)
     settings.set("site_title_fa", "وضعیت سرورها")

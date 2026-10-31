@@ -8,6 +8,7 @@ saving does not download the same URL twice.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import socket
 import time
@@ -34,6 +35,7 @@ USER_AGENT = "v2rayN/7.0"
 MAX_SIZE = 5 * 1024 * 1024
 MAX_SUBSCRIPTION_LINKS = 10
 CACHE_SECONDS = 300
+RESOLVE_TIMEOUT = 5.0
 
 _cache: dict[str, tuple[float, str]] = {}
 
@@ -81,10 +83,28 @@ def is_subscription_url(line: str) -> bool:
 
 
 def _resolve(host: str) -> list[str]:
+    """Blocking DNS lookup. Only called from a worker thread."""
     return list({item[4][0] for item in socket.getaddrinfo(host, None)})
 
 
-def assert_not_local(url: str, resolver=None) -> None:
+async def _addresses(host: str, resolver) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resolve ``host`` without blocking the event loop. ``resolver`` is the sync function tests pass."""
+    lookup = resolver or _resolve
+    try:
+        found = await asyncio.wait_for(asyncio.to_thread(lookup, host), RESOLVE_TIMEOUT)
+    except TimeoutError:
+        raise ImportError(host, "could not resolve host") from None
+    except OSError:
+        raise ImportError(host, "could not resolve") from None
+    if not found:
+        raise ImportError(host, "could not resolve")
+    try:
+        return [ipaddress.ip_address(item) for item in found]
+    except ValueError:
+        raise ImportError(host, "could not resolve") from None
+
+
+async def assert_not_local(url: str, resolver=None) -> None:
     """Reject loopback and link-local targets, including names that resolve to them."""
     parts = urlsplit((url or "").strip())
     host = (parts.hostname or "").strip("[]")
@@ -95,17 +115,7 @@ def assert_not_local(url: str, resolver=None) -> None:
     try:
         addresses = [ipaddress.ip_address(host)]
     except ValueError:
-        lookup = resolver or _resolve
-        try:
-            found = lookup(host)
-        except OSError:
-            raise ImportError(host, "could not resolve") from None
-        if not found:
-            raise ImportError(host, "could not resolve")
-        try:
-            addresses = [ipaddress.ip_address(item) for item in found]
-        except ValueError:
-            raise ImportError(host, "could not resolve") from None
+        addresses = await _addresses(host, resolver)
     for address in addresses:
         mapped = getattr(address, "ipv4_mapped", None)
         if address.is_loopback or address.is_link_local or (
@@ -142,7 +152,7 @@ async def fetch_text(url: str, proxy_pool: ProxyPool | None, timeout: float = 20
     reason = "could not fetch"
 
     async def guard(request: httpx.Request) -> None:
-        assert_not_local(str(request.url), resolver)
+        await assert_not_local(str(request.url), resolver)
 
     for proxy, _label in routes:
         try:
@@ -236,7 +246,7 @@ async def prepare(text: str, proxy_pool: ProxyPool | None = None, *,
     for url in urls:
         host = host_of(url)
         try:
-            assert_not_local(url, resolver)
+            await assert_not_local(url, resolver)
             content = cached_content(url) if use_cache else None
             if content is None:
                 content = await fetch_text(url, proxy_pool, transport=transport, resolver=resolver)
