@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/MoonlessWanderer/v2uptime/main/install.sh | sudo -E bash
 #   curl -fsSL .../install.sh | sudo -E bash -s -- --proxy socks5h://1.2.3.4:1080
-#   sudo bash install.sh --from-archive ./v2uptime-1.0.0-linux-amd64.tar.gz   # fully offline
+#   sudo bash install.sh --from-archive ./v2uptime-v1.4.0-linux-amd64.tar.gz   # fully offline
 #
 # After installation the menu is available as:  sudo v2uptime
 set -Eeuo pipefail
