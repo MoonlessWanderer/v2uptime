@@ -5,14 +5,14 @@
 ## 1.4.0
 
 - An open card starts on 1h, and the same control has 24h, 7d, and 30d. On every range the chart point is the same cell as the status bar. A 1h or 24h point's ping is the median of that cell; a 7d or 30d point's ping is the average of that cell. The tooltip shows that cell.
-- A closed card shows the last 60 checks, one cell each, labelled 1h. Online, Degraded, and Down no longer include the uptime percent on that line. The open card and its 24h/7d/30d bars are unchanged.
+- A closed card shows the last 60 checks, one cell each, labelled 1h. Online, Degraded, and Down no longer include the uptime percent on that line.
 - An update no longer crash-loops when `servers.subscription_id` still references a `subscriptions` table that is already gone. The column is removed by rebuilding `servers`, and the servers and their history stay.
 - The public page and the admin panel use Vazirmatn at two weights (400 and 600) and one size scale. Sort tabs no longer recolor ping or uptime.
 - Persian numbers on the public page keep their order. An open card shows the average ping as `260 ms`, and the footer timezone, parentheses included, stays one left-to-right run. Resolving a subscription link no longer blocks the check loop.
 - The public status page can be shown in English or Persian. Only the Public page language setting chooses it. Dates and digits stay as they were.
 - Config domains can be resolved with a primary and a secondary DNS (Settings → Monitoring). Fake answers in `10.10.34.0/24` are dropped. A failed check of a domain server is stored as DNS error, or DNS blocked when only a filtered answer comes back. This needs Xray 25.6.8 or newer.
 - Stored subscriptions are gone. Servers that came from one stay, as ordinary servers. A subscription URL in the add form is fetched once and its configs are saved like any other server; the URL is not kept and is not synced. The server list can make the selected rows public or hidden, or delete them and their history.
-- A mouse click on the 24h bar of a closed card opens the card. A touch on that bar still only moves the tooltip. The bar and chart inside an open card do not close it.
+- A mouse click on the closed card's bar opens the card. A touch on that bar still only moves the tooltip. The bar and chart inside an open card do not close it.
 - "Down for" omits seconds once the outage is a minute or longer (`47m`, not `47m 2s`). Other durations, including "lasted", are unchanged. "Down since" already uses minute-level relative time.
 - An update writes the database backup into a directory owned by the service user. If that backup fails, the update log says so and the stopped database is copied with its WAL files. A failed update restores that copy before the previous version starts.
 

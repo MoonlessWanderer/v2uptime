@@ -74,7 +74,7 @@ DEFINITIONS: tuple[SettingDef, ...] = (
     SettingDef("site_description", "Real-time connection quality of our servers", "text", "Site description", "general",
                "One line under the title. Leave empty to hide it."),
     SettingDef("test_location", "", "str", "Test location", "general",
-               "Shown under the status banner. Leave empty to hide it."),
+               "Shown under the server list, next to the last check. Leave empty to hide it."),
     SettingDef("public_language", "en", "choice", "Public page language", "general",
                "Language of the status page.",
                choices=(("en", "English"), ("fa", "Persian"))),

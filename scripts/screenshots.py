@@ -84,6 +84,9 @@ def seed(now: int) -> dict[str, int]:
 
     rng = random.Random(7)
     settings.set("test_location", "Tehran")
+    settings.set("site_title_fa", "وضعیت سرورها")
+    settings.set("site_description_fa", "کیفیت اتصال لحظه‌ای سرورها")
+    settings.set("test_location_fa", "تهران")
     links = "\n".join(f"{link}#{quote(name)}" for name, link, _, _ in SERVERS)
     result = server_service.add_links(links)
     assert not result.errors, result.errors

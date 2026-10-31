@@ -23,9 +23,9 @@ The public page lists each server’s status, ping, and uptime. The admin panel 
 
 ## Screenshots
 
-| Public page | Server detail | Mobile | Admin dashboard |
+| Public page | Open card | Mobile | Admin dashboard |
 |---|---|---|---|
-| ![Public status page](docs/screenshots/status-page.jpg) | ![Server detail](docs/screenshots/server-detail.jpg) | ![Mobile status page](docs/screenshots/mobile.jpg) | ![Admin dashboard](docs/screenshots/admin-dashboard.jpg) |
+| ![Public status page](docs/screenshots/status-page.jpg) | ![Open card](docs/screenshots/server-detail.jpg) | ![Mobile status page](docs/screenshots/mobile.jpg) | ![Admin dashboard](docs/screenshots/admin-dashboard.jpg) |
 
 ## Requirements
 
@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/MoonlessWanderer/v2uptime/main/inst
 Offline install: on a machine that has internet, download `v2uptime-<version>-linux-amd64.tar.gz` (or `arm64`) from Releases, copy it to the server, and run:
 
 ```bash
-sudo bash install.sh --from-archive ./v2uptime-1.1.0-linux-amd64.tar.gz
+sudo bash install.sh --from-archive ./v2uptime-1.4.0-linux-amd64.tar.gz
 ```
 
 GitHub Actions (`.github/workflows/release.yml`) builds those archives for each release, with wheels for CPython 3.10–3.13. Apt packages (nginx, certbot, python3-venv) are not inside the archive. In an offline install they still come from an apt mirror (`--apt-mirror`).
@@ -80,7 +80,7 @@ When GitHub is not reachable directly, the download (and pip) can go through a h
 Update from an offline archive:
 
 ```bash
-sudo v2uptime --from-archive ./v2uptime-1.1.0-linux-amd64.tar.gz
+sudo v2uptime --from-archive ./v2uptime-1.4.0-linux-amd64.tar.gz
 ```
 
 Then choose **2) Update**.
