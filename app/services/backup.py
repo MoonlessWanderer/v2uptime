@@ -38,7 +38,7 @@ def export_data() -> dict[str, Any]:
 def import_data(data: dict[str, Any], replace: bool = False) -> dict[str, Any]:
     """Merge (default) or replace servers/subscriptions; settings are always merged."""
     if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise ValueError("فایل پشتیبان معتبر نیست.")
+        raise ValueError("Backup file is not valid.")
     summary: dict[str, Any] = {"servers": 0, "skipped": 0, "subscriptions": 0, "settings": 0, "errors": []}
     with db.atomic():
         if replace:

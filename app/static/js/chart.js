@@ -98,7 +98,7 @@
     this.yMax = cfg.yMax || niceMax(Math.max.apply(null, present.concat([1])) * 1.1);
     var text = cssVar("--muted"), grid = cssVar("--border"), color = cfg.color || cssVar("--accent");
     ctx.clearRect(0, 0, this.w, this.h);
-    ctx.font = "11px Vazirmatn, Tahoma, sans-serif";
+    ctx.font = "11px system-ui, Segoe UI, sans-serif";
     ctx.fillStyle = text;
     ctx.strokeStyle = grid;
     ctx.lineWidth = 1;
@@ -123,7 +123,7 @@
 
     if (!present.length) {
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText("داده‌ای وجود ندارد", this.pad.l + this.plotW / 2, this.pad.t + this.plotH / 2);
+      ctx.fillText("No data", this.pad.l + this.plotW / 2, this.pad.t + this.plotH / 2);
       return;
     }
 
@@ -169,8 +169,8 @@
         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(hx, this.yAt(hv), 3.5, 0, Math.PI * 2); ctx.fill();
       }
       var line1 = tipTime(cfg, this.hover);
-      var line2 = hv === null || hv === undefined ? "بدون داده" : (cfg.unit === "%" ? hv.toFixed(2).replace(/\.?0+$/, "") : Math.round(hv)) + " " + (cfg.unit || "");
-      ctx.font = "12px Vazirmatn, Tahoma, sans-serif";
+      var line2 = hv === null || hv === undefined ? "No data" : (cfg.unit === "%" ? hv.toFixed(2).replace(/\.?0+$/, "") : Math.round(hv)) + " " + (cfg.unit || "");
+      ctx.font = "12px system-ui, Segoe UI, sans-serif";
       var tw = Math.max(ctx.measureText(line1).width, ctx.measureText(line2).width) + 16;
       var tx = Math.min(Math.max(hx - tw / 2, 2), this.w - tw - 2);
       ctx.fillStyle = cssVar("--text");

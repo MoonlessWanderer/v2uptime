@@ -79,7 +79,7 @@ confirm() {  # confirm "Question" [y|n]
   answer="$(ask "$1 (y/n)" "$default")"
   [[ "$answer" =~ ^[Yy] ]]
 }
-pause() { read -r -p "Enter را بزنید…" _ < /dev/tty || true; }
+pause() { read -r -p "Press Enter…" _ < /dev/tty || true; }
 
 usage() {
   cat <<EOF
@@ -888,21 +888,21 @@ menu() {
     fi
     printf '\n%s v2uptime %s — %b  %s\n' "$BOLD" "$NC" "$state" "${DOMAIN:+($DOMAIN)}"
     cat <<'EOF'
-  1) نصب (Install)
-  2) آپدیت پنل (Update)
-  3) آپدیت هسته Xray
+  1) Install
+  2) Update
+  3) Update Xray core
   4) Start / Stop / Restart
-  5) مشاهده لاگ‌ها
-  6) دامنه و SSL
-  7) تغییر پورت
-  8) وضعیت سرویس
-  9) بکاپ و ریستور دیتابیس
- 10) ریست رمز ادمین
- 11) حذف کامل
-  0) خروج
+  5) View logs
+  6) Domain and SSL
+  7) Change port
+  8) Service status
+  9) Backup and restore database
+ 10) Reset admin password
+ 11) Uninstall
+  0) Exit
 EOF
     local choice
-    choice="$(ask "انتخاب" "0")"
+    choice="$(ask "Choice" "0")"
     case "$choice" in
       1) run_step do_install ;;
       2) run_step do_update ;;

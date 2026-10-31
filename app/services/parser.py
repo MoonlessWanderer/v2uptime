@@ -89,7 +89,7 @@ def b64decode_text(data: str) -> str:
     try:
         return base64.b64decode(cleaned, validate=True).decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError):
-        raise LinkParseError("رشته Base64 نامعتبر است.") from None
+        raise LinkParseError("Invalid Base64.") from None
 
 
 def _parse_query(query: str) -> dict[str, str]:
@@ -108,14 +108,14 @@ def _parse_query(query: str) -> dict[str, str]:
 def _validate_host(host: str) -> str:
     host = (host or "").strip().strip("[]")
     if not host:
-        raise LinkParseError("آدرس سرور در لینک وجود ندارد.")
+        raise LinkParseError("Link has no server address.")
     try:
         ipaddress.ip_address(host)
         return host
     except ValueError:
         pass
     if not _HOST_RE.match(host):
-        raise LinkParseError(f"آدرس سرور نامعتبر است: {host}")
+        raise LinkParseError(f"Invalid server address: {host}")
     return host.lower().rstrip(".")
 
 
@@ -123,9 +123,9 @@ def _validate_port(value: Any) -> int:
     try:
         port = int(str(value).strip())
     except (TypeError, ValueError):
-        raise LinkParseError("پورت سرور نامعتبر است یا وجود ندارد.") from None
+        raise LinkParseError("Server port is missing or invalid.") from None
     if not 1 <= port <= 65535:
-        raise LinkParseError(f"پورت باید بین ۱ تا ۶۵۵۳۵ باشد (مقدار فعلی: {port}).")
+        raise LinkParseError(f"Port must be between 1 and 65535 (got {port}).")
     return port
 
 
@@ -135,19 +135,19 @@ def _split_netloc(netloc: str) -> tuple[str, int]:
         parts = urlsplit("//" + netloc)
         host, port = parts.hostname, parts.port
     except ValueError:
-        raise LinkParseError("پورت سرور نامعتبر است.") from None
+        raise LinkParseError("Invalid server port.") from None
     if port is None:
-        raise LinkParseError("پورت سرور در لینک مشخص نشده است.")
+        raise LinkParseError("Link has no server port.")
     return _validate_host(host or ""), _validate_port(port)
 
 
 def _validate_uuid(value: str, protocol: str) -> str:
     value = (value or "").strip()
     if not value:
-        raise LinkParseError(f"شناسه کاربر (UUID) در لینک {protocol} وجود ندارد.")
+        raise LinkParseError(f"Link has no {protocol} user id.")
     # Xray also accepts any 1-30 byte string and maps it to a UUIDv5.
     if not _UUID_RE.match(value) and not (len(value.encode()) <= 30 and not re.search(r"\s", value)):
-        raise LinkParseError(f"شناسه کاربر (UUID) نامعتبر است: {value[:40]}")
+        raise LinkParseError(f"Invalid user id: {value[:40]}")
     return value
 
 
@@ -163,18 +163,18 @@ def _normalize_network(value: str) -> str:
     net = (value or "").strip().lower()
     net = _NETWORK_ALIASES.get(net, net)
     if net in _REMOVED_NETWORKS:
-        raise LinkParseError(f"ترنسپورت {_REMOVED_NETWORKS[net]} در نسخه‌های جدید Xray حذف شده است.")
+        raise LinkParseError(f"Transport {_REMOVED_NETWORKS[net]} was removed from current Xray.")
     if net not in SUPPORTED_NETWORKS:
-        raise LinkParseError(f"ترنسپورت پشتیبانی نمی‌شود: {value}")
+        raise LinkParseError(f"Unsupported transport: {value}")
     return net
 
 
 def _normalize_security(value: str, default: str) -> str:
     sec = (value or "").strip().lower() or default
     if sec == "xtls":
-        raise LinkParseError("امنیت XTLS قدیمی است؛ از tls یا reality همراه با flow=xtls-rprx-vision استفاده کنید.")
+        raise LinkParseError("XTLS is obsolete. Use tls or reality with flow=xtls-rprx-vision.")
     if sec not in SUPPORTED_SECURITY:
-        raise LinkParseError(f"نوع امنیت پشتیبانی نمی‌شود: {value}")
+        raise LinkParseError(f"Unsupported security: {value}")
     return sec
 
 
@@ -217,7 +217,7 @@ def build_stream_settings(network: str, security: str, p: dict[str, str], addres
                 request["headers"] = {"Host": _csv(host)}
             stream["tcpSettings"] = {"header": {"type": "http", "request": request}}
         elif header_type not in ("none", ""):
-            raise LinkParseError(f"headerType نامعتبر برای tcp: {header_type}")
+            raise LinkParseError(f"Invalid tcp headerType: {header_type}")
     elif network == "ws":
         ws: dict[str, Any] = {"path": path or "/"}
         if host:
@@ -239,7 +239,7 @@ def build_stream_settings(network: str, security: str, p: dict[str, str], addres
     elif network == "xhttp":
         mode = (p.get("mode") or "auto").lower()
         if mode not in ("auto", "packet-up", "stream-up", "stream-one"):
-            raise LinkParseError(f"mode نامعتبر برای xhttp: {mode}")
+            raise LinkParseError(f"Invalid xhttp mode: {mode}")
         xh: dict[str, Any] = {"path": path or "/", "mode": mode}
         if host:
             xh["host"] = host
@@ -247,9 +247,9 @@ def build_stream_settings(network: str, security: str, p: dict[str, str], addres
             try:
                 extra = json.loads(p["extra"])
             except json.JSONDecodeError:
-                raise LinkParseError("پارامتر extra در xhttp باید JSON معتبر باشد.") from None
+                raise LinkParseError("xhttp extra must be valid JSON.") from None
             if not isinstance(extra, dict):
-                raise LinkParseError("پارامتر extra در xhttp باید یک شیء JSON باشد.")
+                raise LinkParseError("xhttp extra must be a JSON object.")
             xh["extra"] = extra
         stream["xhttpSettings"] = xh
     elif network == "kcp":
@@ -260,7 +260,7 @@ def build_stream_settings(network: str, security: str, p: dict[str, str], addres
 
     fp = (p.get("fp") or "").lower()
     if fp and fp not in _FINGERPRINTS:
-        raise LinkParseError(f"fingerprint نامعتبر است: {fp}")
+        raise LinkParseError(f"Invalid fingerprint: {fp}")
 
     if security == "tls":
         sni = p.get("sni") or p.get("peer") or host or ("" if _is_ip(address) else address)
@@ -277,15 +277,15 @@ def build_stream_settings(network: str, security: str, p: dict[str, str], addres
     elif security == "reality":
         pbk = p.get("pbk", "")
         if not pbk:
-            raise LinkParseError("پارامتر pbk (کلید عمومی) برای reality الزامی است.")
+            raise LinkParseError("reality requires pbk (public key).")
         if not re.match(r"^[A-Za-z0-9_\-]{40,50}$", pbk):
-            raise LinkParseError("کلید عمومی reality (pbk) نامعتبر است.")
+            raise LinkParseError("Invalid reality public key (pbk).")
         sni = p.get("sni") or p.get("peer") or ""
         if not sni:
-            raise LinkParseError("پارامتر sni برای reality الزامی است.")
+            raise LinkParseError("reality requires sni.")
         sid = p.get("sid", "")
         if sid and not re.match(r"^[0-9a-fA-F]{0,16}$", sid):
-            raise LinkParseError("shortId (sid) باید هگزادسیمال و حداکثر ۱۶ کاراکتر باشد.")
+            raise LinkParseError("shortId (sid) must be hexadecimal and at most 16 characters.")
         reality: dict[str, Any] = {
             "serverName": sni,
             "fingerprint": fp or "chrome",
@@ -313,7 +313,7 @@ def _parse_url_style(link: str, protocol: str) -> tuple[str, str, int, dict[str,
     """Parse protocol://user@host:port?query#remark."""
     body, query, remark = _split_link(link)
     if "@" not in body:
-        raise LinkParseError(f"ساختار لینک {protocol} نامعتبر است (بخش user@host:port پیدا نشد).")
+        raise LinkParseError(f"Invalid {protocol} link: missing user@host:port.")
     user, _, netloc = body.rpartition("@")
     host, port = _split_netloc(netloc)
     return unquote(user), host, port, _parse_query(query), remark
@@ -326,7 +326,7 @@ def _parse_vless(link: str) -> ParsedLink:
     security = _normalize_security(p.get("security", ""), "none")
     flow = p.get("flow", "")
     if flow not in _VLESS_FLOWS:
-        raise LinkParseError(f"flow نامعتبر است: {flow}")
+        raise LinkParseError(f"Invalid flow: {flow}")
     user: dict[str, Any] = {"id": uid, "encryption": p.get("encryption") or "none"}
     if flow:
         user["flow"] = flow
@@ -342,7 +342,7 @@ def _vmess_outbound(host: str, port: int, uid: str, cipher: str, network: str, s
                     p: dict[str, str]) -> dict[str, Any]:
     cipher = (cipher or "auto").lower()
     if cipher not in _VMESS_CIPHERS:
-        raise LinkParseError(f"رمزنگاری vmess پشتیبانی نمی‌شود: {cipher}")
+        raise LinkParseError(f"Unsupported vmess encryption: {cipher}")
     return {
         "protocol": "vmess",
         "settings": {"vnext": [{"address": host, "port": port, "users": [{"id": uid, "security": cipher}]}]},
@@ -364,9 +364,9 @@ def _parse_vmess(link: str) -> ParsedLink:
     try:
         data = json.loads(b64decode_text(payload.split("#", 1)[0]))
     except (LinkParseError, json.JSONDecodeError):
-        raise LinkParseError("لینک vmess نامعتبر است (Base64 یا JSON داخل آن قابل خواندن نیست).") from None
+        raise LinkParseError("Invalid vmess link: could not read the Base64 JSON.") from None
     if not isinstance(data, dict):
-        raise LinkParseError("لینک vmess نامعتبر است (JSON باید یک شیء باشد).")
+        raise LinkParseError("Invalid vmess link: JSON must be an object.")
 
     def val(key: str) -> str:
         value = data.get(key)
@@ -402,7 +402,7 @@ def _parse_vmess(link: str) -> ParsedLink:
 def _parse_trojan(link: str) -> ParsedLink:
     password, host, port, p, remark = _parse_url_style(link, "trojan")
     if not password:
-        raise LinkParseError("رمز عبور در لینک trojan وجود ندارد.")
+        raise LinkParseError("Trojan link has no password.")
     network = _normalize_network(p.get("type", ""))
     security = _normalize_security(p.get("security", ""), "tls")
     outbound = {
@@ -420,7 +420,7 @@ def _ss_userinfo(userinfo: str) -> tuple[str, str]:
     if not sep or method.lower() not in _SS_METHODS:
         method, sep, password = b64decode_text(decoded).partition(":")
     if not sep:
-        raise LinkParseError("بخش method:password در لینک ss نامعتبر است.")
+        raise LinkParseError("Invalid ss method:password.")
     return method, password
 
 
@@ -428,7 +428,7 @@ def _parse_ss(link: str) -> ParsedLink:
     body, query, remark = _split_link(link)
     p = _parse_query(query)
     if p.get("plugin"):
-        raise LinkParseError("پلاگین‌های Shadowsocks (مثل obfs یا v2ray-plugin) در Xray پشتیبانی نمی‌شوند.")
+        raise LinkParseError("Shadowsocks plugins (such as obfs or v2ray-plugin) are not supported by Xray.")
     if "@" in body:  # SIP002
         userinfo, _, netloc = body.rpartition("@")
         method, password = _ss_userinfo(userinfo)
@@ -436,14 +436,14 @@ def _parse_ss(link: str) -> ParsedLink:
         decoded = b64decode_text(body)
         creds, sep, netloc = decoded.rpartition("@")
         if not sep:
-            raise LinkParseError("لینک ss نامعتبر است.")
+            raise LinkParseError("Invalid ss link.")
         method, _, password = creds.partition(":")
     host, port = _split_netloc(netloc)
     method_key = method.strip().lower()
     if method_key not in _SS_METHODS:
-        raise LinkParseError(f"روش رمزنگاری Shadowsocks در Xray پشتیبانی نمی‌شود: {method}")
+        raise LinkParseError(f"Unsupported Shadowsocks method: {method}")
     if not password:
-        raise LinkParseError("رمز عبور در لینک ss وجود ندارد.")
+        raise LinkParseError("ss link has no password.")
     network = _normalize_network(p.get("type", ""))
     security = _normalize_security(p.get("security", ""), "none")
     server: dict[str, Any] = {"address": host, "port": port, "method": _SS_METHODS[method_key], "password": password}
@@ -462,17 +462,17 @@ def parse_link(link: str) -> ParsedLink:
     """Parse a single share link."""
     link = (link or "").strip()
     if not link:
-        raise LinkParseError("لینک خالی است.")
+        raise LinkParseError("Link is empty.")
     if len(link) > _MAX_LINK_LENGTH:
-        raise LinkParseError("لینک بیش از حد طولانی است.")
+        raise LinkParseError("Link is too long.")
     if "://" not in link:
-        raise LinkParseError("لینک باید با پروتکل شروع شود (مثلاً vless://).")
+        raise LinkParseError("Link must start with a protocol (for example vless://).")
     scheme = link.split("://", 1)[0].lower()
     parser = _PARSERS.get(scheme)
     if parser is None:
         if scheme in _KNOWN_UNSUPPORTED:
-            raise LinkParseError(f"پروتکل {scheme} پشتیبانی نمی‌شود (فقط vless، vmess، trojan و ss).")
-        raise LinkParseError(f"پروتکل ناشناخته: {scheme}")
+            raise LinkParseError(f'unsupported protocol "{scheme}"')
+        raise LinkParseError(f"Unknown protocol: {scheme}")
     parsed = parser(link)
     parsed.remark = parsed.remark.strip()[:200]
     parsed.country = country_from_remark(parsed.remark)
@@ -485,15 +485,15 @@ def decode_subscription(content: str | bytes) -> str:
         content = content.decode("utf-8", errors="replace")
     text = content.strip().lstrip("﻿")
     if not text:
-        raise LinkParseError("محتوای Subscription خالی است.")
+        raise LinkParseError("Subscription content is empty.")
     if "://" in text:
         return text
     try:
         decoded = b64decode_text(text)
     except LinkParseError:
-        raise LinkParseError("محتوای Subscription نه Base64 معتبر است و نه لیست لینک.") from None
+        raise LinkParseError("Subscription content is neither valid Base64 nor a link list.") from None
     if "://" not in decoded:
-        raise LinkParseError("در محتوای Subscription هیچ لینکی پیدا نشد.")
+        raise LinkParseError("Subscription content has no links.")
     return decoded
 
 

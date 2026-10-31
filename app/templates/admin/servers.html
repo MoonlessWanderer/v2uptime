@@ -1,66 +1,66 @@
 {% extends "admin/base.html" %}
-{% block page_title %}سرورها{% endblock %}
+{% block page_title %}Servers{% endblock %}
 {% block content %}
-<div class="page-head"><h1>سرورها</h1><span class="muted">{{ rows|length }} سرور · ترتیب را با کشیدن ردیف‌ها یا دکمه‌های بالا/پایین تغییر دهید.</span></div>
+<div class="page-head"><h1>Servers</h1><span class="muted">{{ rows|length }} servers · Drag rows, or use the up and down buttons, to reorder.</span></div>
 
 <section class="panel">
-  <h2>افزودن سرور</h2>
+  <h2>Add servers</h2>
   <form method="post" action="{{ admin_url('/servers/add') }}" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <div class="field full">
-      <label for="links">لینک‌ها (هر خط یک لینک؛ محتوای Base64 Subscription هم قبول است)</label>
+      <label for="links">Links (one per line; Base64 subscription content is accepted too)</label>
       <textarea id="links" name="links" class="mono" rows="5" placeholder="vless://...&#10;vmess://...&#10;trojan://...&#10;ss://..." required></textarea>
-      <span class="help">remark لینک به‌عنوان نام استفاده می‌شود. برای Subscription با همگام‌سازی دوره‌ای از صفحه Subscription استفاده کنید.</span>
+      <span class="help">The link remark becomes the server name. For a subscription that syncs on a schedule, use the Subscriptions page.</span>
     </div>
-    <div class="field"><label for="tags">برچسب‌ها (اختیاری، با کاما)</label><input type="text" id="tags" name="tags" placeholder="آلمان, اقتصادی"></div>
-    <div class="field" style="align-self:end"><label class="check"><input type="checkbox" name="is_public" value="1" checked> نمایش در صفحه عمومی</label></div>
-    <div class="form-actions full"><button class="btn btn-primary" type="submit"><svg class="ic"><use href="#i-plus"/></svg>افزودن</button></div>
+    <div class="field"><label for="tags">Tags (optional, comma-separated)</label><input type="text" id="tags" name="tags" dir="auto" placeholder="eu, economy"></div>
+    <div class="field" style="align-self:end"><label class="check"><input type="checkbox" name="is_public" value="1" checked> Show on the public page</label></div>
+    <div class="form-actions full"><button class="btn btn-primary" type="submit"><svg class="ic"><use href="#i-plus"/></svg>Add</button></div>
   </form>
 </section>
 
 <section class="panel">
   <div class="table-wrap">
   <table class="table" id="server-table">
-    <thead><tr><th></th><th>نام</th><th>وضعیت</th><th>پروتکل</th><th class="num">پینگ</th><th class="num">آپتایم ۲۴h</th><th class="num">پورت محلی</th><th>نمایش</th><th></th></tr></thead>
+    <thead><tr><th></th><th>Name</th><th>Status</th><th>Protocol</th><th class="num">Ping</th><th class="num">Uptime 24h</th><th class="num">Local port</th><th>Visibility</th><th></th></tr></thead>
     <tbody>
     {% for row in rows %}{% set s = row.s %}
       <tr data-id="{{ s.id }}" draggable="true">
-        <td class="drag-handle" title="جابجایی"><svg class="ic"><use href="#i-grip"/></svg></td>
+        <td class="drag-handle" title="Drag to reorder"><svg class="ic"><use href="#i-grip"/></svg></td>
         <td>
-          <a href="{{ admin_url('/servers/' ~ s.id) }}"><strong>{{ flag_emoji(s.country) }} {{ s.name }}</strong></a>
-          {% if s.subscription %}<br><small class="muted">Sub: {{ s.subscription.name or s.subscription.id }}</small>{% endif %}
-          {% if s.xray_error %}<br><small class="pill pill-bad" title="{{ s.xray_error }}">رد شده توسط Xray</small>{% endif %}
-          {% if s.tags %}<br><small class="muted">{{ s.tags }}</small>{% endif %}
+          <a href="{{ admin_url('/servers/' ~ s.id) }}"><strong>{{ flag_emoji(s.country) }} <bdi>{{ s.name }}</bdi></strong></a>
+          {% if s.subscription %}<br><small class="muted">Sub: <bdi>{{ s.subscription.name or s.subscription.id }}</bdi></small>{% endif %}
+          {% if s.xray_error %}<br><small class="pill pill-bad" title="{{ s.xray_error }}">Rejected by Xray</small>{% endif %}
+          {% if s.tags %}<br><small class="muted" dir="auto"><bdi>{{ s.tags }}</bdi></small>{% endif %}
         </td>
-        <td>{% if not s.is_active %}<span class="pill">غیرفعال</span>{% else %}<span class="status-dot {{ row.status }}"></span>{{ row.status|status_label }}{% endif %}</td>
+        <td>{% if not s.is_active %}<span class="pill">Inactive</span>{% else %}<span class="status-dot {{ row.status }}"></span>{{ row.status|status_label }}{% endif %}</td>
         <td><span class="chip">{{ s.protocol|upper }}</span> <span class="chip">{{ s.transport }}</span> <span class="chip">{{ s.security }}</span></td>
         <td class="num">{{ row.latency|ms }}</td>
         <td class="num">{{ row.uptime|percent }}</td>
-        <td class="num">{{ s.socks_port or '—' }}{% if s.is_active and not row.loaded %} <small class="pill pill-warn">بارگذاری نشده</small>{% endif %}</td>
+        <td class="num">{{ s.socks_port or '—' }}{% if s.is_active and not row.loaded %} <small class="pill pill-warn">Not loaded</small>{% endif %}</td>
         <td>
-          <button type="button" class="btn btn-sm" data-toggle="is_active" data-id="{{ s.id }}">{{ 'فعال' if s.is_active else 'غیرفعال' }}</button>
-          <button type="button" class="btn btn-sm" data-toggle="is_public" data-id="{{ s.id }}" title="نمایش در صفحه عمومی">
+          <button type="button" class="btn btn-sm" data-toggle="is_active" data-id="{{ s.id }}">{{ 'Active' if s.is_active else 'Inactive' }}</button>
+          <button type="button" class="btn btn-sm" data-toggle="is_public" data-id="{{ s.id }}" title="Show on the public page">
             <svg class="ic"><use href="#i-{{ 'eye' if s.is_public else 'eye-off' }}"/></svg></button>
         </td>
         <td class="actions">
-          <button type="button" class="btn btn-sm" data-move="up" aria-label="بالا"><svg class="ic"><use href="#i-up"/></svg></button>
-          <button type="button" class="btn btn-sm" data-move="down" aria-label="پایین"><svg class="ic"><use href="#i-down"/></svg></button>
-          <button type="button" class="btn btn-sm" data-test="{{ s.id }}"><svg class="ic"><use href="#i-play"/></svg>تست همین الان</button>
+          <button type="button" class="btn btn-sm" data-move="up" aria-label="Move up"><svg class="ic"><use href="#i-up"/></svg></button>
+          <button type="button" class="btn btn-sm" data-move="down" aria-label="Move down"><svg class="ic"><use href="#i-down"/></svg></button>
+          <button type="button" class="btn btn-sm" data-test="{{ s.id }}"><svg class="ic"><use href="#i-play"/></svg>Test now</button>
           <span class="test-result" data-result-for="{{ s.id }}"></span>
-          <a class="btn btn-sm" href="{{ admin_url('/servers/' ~ s.id ~ '/edit') }}"><svg class="ic"><use href="#i-edit"/></svg></a>
+          <a class="btn btn-sm" href="{{ admin_url('/servers/' ~ s.id ~ '/edit') }}" aria-label="Edit"><svg class="ic"><use href="#i-edit"/></svg></a>
           {% if s.xray_error %}
           <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/retry') }}" style="display:inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn btn-sm" type="submit">تلاش دوباره</button>
+            <input type="hidden" name="csrf_token" value="{{ csrf }}"><button class="btn btn-sm" type="submit">Try again</button>
           </form>
           {% endif %}
-          <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/delete') }}" style="display:inline" data-confirm="سرور «{{ s.name }}» و تمام تاریخچه‌اش حذف شود؟">
+          <form method="post" action="{{ admin_url('/servers/' ~ s.id ~ '/delete') }}" style="display:inline" data-confirm="Delete {{ s.name|bidi }} and its history?">
             <input type="hidden" name="csrf_token" value="{{ csrf }}">
-            <button class="btn btn-sm btn-danger" type="submit" aria-label="حذف"><svg class="ic"><use href="#i-trash"/></svg></button>
+            <button class="btn btn-sm btn-danger" type="submit" aria-label="Delete"><svg class="ic"><use href="#i-trash"/></svg></button>
           </form>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="9" class="muted">هنوز سروری اضافه نشده است.</td></tr>
+      <tr><td colspan="9" class="muted">No servers yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>

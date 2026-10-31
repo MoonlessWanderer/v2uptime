@@ -149,8 +149,8 @@ def test_queue_sends_when_route_returns(tg):
     enqueue_rows("down", "hello", 1000, ["111", "-100222"])
     assert run(worker.process_once(now=1500)) == 2
     rows = list(TelegramOutbox.select())
-    assert all(r.status == "sent" and r.via == "مستقیم" for r in rows)
-    assert "تأخیر" in json.loads(fake.requests[0][1].read())["text"]  # 500s late -> delay note
+    assert all(r.status == "sent" and r.via == "direct" for r in rows)
+    assert "late" in json.loads(fake.requests[0][1].read())["text"]  # 500s late -> delay note
 
 
 def test_more_than_ten_messages_are_merged(tg):
@@ -160,7 +160,7 @@ def test_more_than_ten_messages_are_merged(tg):
         enqueue_rows("down", f"event {i}", 1000 + i, ["111"])
     assert run(worker.process_once(now=1100)) == 1
     body = fake.requests[0][1].read().decode()
-    assert "\\u0645" in body or "خلاصه" in body
+    assert "Summary" in body
     assert TelegramOutbox.select().where(TelegramOutbox.status == "sent").count() == 12
 
 

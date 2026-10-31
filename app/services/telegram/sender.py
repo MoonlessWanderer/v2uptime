@@ -38,7 +38,7 @@ class Route:
 
     @property
     def label(self) -> str:
-        return "مستقیم" if self.kind == "direct" else f"از طریق سرور «{self.name}»"
+        return "direct" if self.kind == "direct" else f"via {self.name}"
 
 
 DIRECT = Route("direct")
@@ -93,10 +93,10 @@ class TelegramSender:
         """
         token = settings.get("telegram_token")
         if not token:
-            return ApiResult(False, error="Bot Token تنظیم نشده است.", permanent=True)
+            return ApiResult(False, error="Bot token is not set.", permanent=True)
         routes = await self.routes(exclude)
         if not routes:
-            return ApiResult(False, error="هیچ مسیر ارسالی وجود ندارد (سرور آنلاینی پیدا نشد).")
+            return ApiResult(False, error="No route is available (no online server).")
         auto = settings.get("telegram_send_mode") == "auto"
         url = f"{self.api_base}/bot{token}/{method}"
         tried: list[str] = []
@@ -125,4 +125,4 @@ class TelegramSender:
             # Telegram itself answered; other routes would get the same answer.
             permanent = response.status_code in (400, 401, 403, 404)
             return ApiResult(False, route=route, error=description, permanent=permanent, tried=tried)
-        return ApiResult(False, error="ارسال از همه مسیرها ناموفق بود: " + "؛ ".join(tried), tried=tried)
+        return ApiResult(False, error="Every route failed: " + "; ".join(tried), tried=tried)

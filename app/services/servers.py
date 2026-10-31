@@ -22,7 +22,7 @@ class AddResult:
 
 
 def normalize_tags(text: str) -> str:
-    tags = [t.strip()[:30] for t in re.split(r"[,،]", text or "") if t.strip()]
+    tags = [t.strip()[:30] for t in re.split(r"[,\u060c]", text or "") if t.strip()]
     return ",".join(dict.fromkeys(tags))[:500]
 
 
@@ -75,16 +75,16 @@ def update_server(server_id: int, *, name: str, country: str, tags: str, is_acti
     server = Server.get_by_id(server_id)
     name = (name or "").strip()
     if not name:
-        raise ValueError("نام سرور نمی‌تواند خالی باشد.")
+        raise ValueError("Server name cannot be empty.")
     country = (country or "").strip().upper()
     if country and not re.fullmatch(r"[A-Z]{2}", country):
-        raise ValueError("کد کشور باید دو حرف انگلیسی باشد (مثلاً DE).")
+        raise ValueError("Country code must be two letters (for example DE).")
     raw_link = (raw_link or "").strip()
     if raw_link and raw_link != server.raw_link:
         parsed = parse_link(raw_link)
         duplicate = Server.select().where(Server.identity == parsed.identity, Server.id != server.id).exists()
         if duplicate:
-            raise ValueError("سرور دیگری با همین آدرس، پورت و شناسه وجود دارد.")
+            raise ValueError("Another server already uses this address, port, and identity.")
         apply_parsed(server, parsed)
     server.name = name[:200]
     server.country = country

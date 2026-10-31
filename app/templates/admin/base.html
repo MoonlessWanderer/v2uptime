@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}{% block page_title %}پنل مدیریت{% endblock %} · {{ settings.get('site_title') }}{% endblock %}
+{% block title %}{% block page_title %}Admin{% endblock %} · {{ settings.get('site_title') }}{% endblock %}
 {% block head %}<meta name="csrf-token" content="{{ csrf }}"><meta name="admin-base" content="{{ admin_url('') }}"><meta name="robots" content="noindex,nofollow">{% endblock %}
 {% block body_class %}admin{% endblock %}
 {% macro nav_link(key, path, icon, label) -%}
@@ -9,30 +9,30 @@
 <div class="admin-shell">
   <header class="topbar">
     <div class="topbar-actions">
-      <button class="icon-btn nav-toggle" type="button" aria-label="منو" data-nav-toggle><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
-      <a class="brand" href="{{ admin_url('/') }}"><img src="{{ static_url('img/favicon.svg') }}" alt="" width="26" height="26">{{ settings.get('site_title') }}</a>
+      <button class="icon-btn nav-toggle" type="button" aria-label="Menu" data-nav-toggle><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <a class="brand" href="{{ admin_url('/') }}"><img src="{{ static_url('img/favicon.svg') }}" alt="" width="26" height="26"><bdi>{{ settings.get('site_title') }}</bdi></a>
     </div>
     <div class="topbar-actions">
-      <a class="btn btn-sm" href="/" target="_blank" rel="noopener">صفحه عمومی</a>
-      <button class="icon-btn theme-toggle" type="button" aria-label="تغییر حالت روشن/تاریک" data-theme-toggle>
+      <a class="btn btn-sm" href="/" target="_blank" rel="noopener">Public page</a>
+      <button class="icon-btn theme-toggle" type="button" aria-label="Toggle color theme" data-theme-toggle>
         <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg><svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
       </button>
       <form method="post" action="{{ admin_url('/logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf }}">
-        <button class="icon-btn" type="submit" aria-label="خروج" title="خروج ({{ admin.username }})"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></button>
+        <button class="icon-btn" type="submit" aria-label="Sign out" title="Sign out ({{ admin.username }})"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></button>
       </form>
     </div>
   </header>
   <div class="admin-body">
-    <nav class="sidenav" id="sidenav" aria-label="منوی مدیریت">
-      {{ nav_link('dashboard', '/', 'home', 'داشبورد') }}
-      {{ nav_link('servers', '/servers', 'server', 'سرورها') }}
-      {{ nav_link('subscriptions', '/subscriptions', 'link', 'Subscription') }}
-      {{ nav_link('incidents', '/incidents', 'alert', 'قطعی‌ها') }}
-      {{ nav_link('telegram', '/telegram', 'send', 'ربات تلگرام') }}
-      {{ nav_link('settings', '/settings', 'settings', 'تنظیمات') }}
-      {{ nav_link('backup', '/backup', 'archive', 'پشتیبان') }}
-      {{ nav_link('password', '/password', 'key', 'تغییر رمز') }}
+    <nav class="sidenav" id="sidenav" aria-label="Admin">
+      {{ nav_link('dashboard', '/', 'home', 'Dashboard') }}
+      {{ nav_link('servers', '/servers', 'server', 'Servers') }}
+      {{ nav_link('subscriptions', '/subscriptions', 'link', 'Subscriptions') }}
+      {{ nav_link('incidents', '/incidents', 'alert', 'Incidents') }}
+      {{ nav_link('telegram', '/telegram', 'send', 'Telegram') }}
+      {{ nav_link('settings', '/settings', 'settings', 'Settings') }}
+      {{ nav_link('backup', '/backup', 'archive', 'Backup') }}
+      {{ nav_link('password', '/password', 'key', 'Password') }}
     </nav>
     <main class="admin-main">
       {% for kind, message in flashes %}

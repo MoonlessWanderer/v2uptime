@@ -1,8 +1,8 @@
 {% extends "admin/base.html" %}
 {% from "admin/_fields.html" import field %}
-{% block page_title %}تنظیمات{% endblock %}
+{% block page_title %}Settings{% endblock %}
 {% block content %}
-<div class="page-head"><h1>تنظیمات</h1></div>
+<div class="page-head"><h1>Settings</h1></div>
 <form method="post" action="{{ admin_url('/settings') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf }}">
   {% for key, title, defs in groups %}
@@ -14,9 +14,10 @@
   </section>
   {% endfor %}
   <div class="alert alert-info">
-    وضعیت <b>قطع</b>: N تست ناموفق پشت‌سرهم (Incident باز می‌شود)؛ با M تست موفق پشت‌سرهم بسته می‌شود.
-    <b>ناپایدار</b>: آخرین تست موفق ولی کند، یا درصد شکست ۱۰ دقیقه اخیر بیش از آستانه. همین قانون مبنای اعلان‌های تلگرام است.
+    <b>Down</b> starts an incident after N failed checks in a row, and closes it after M successful checks in a row.
+    <b>Degraded</b> means the server is up, but the last check failed, latency is high, or too many recent checks failed.
+    Telegram alerts use the same rules.
   </div>
-  <div class="form-actions"><button class="btn btn-primary" type="submit">ذخیره تنظیمات</button></div>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">Save settings</button></div>
 </form>
 {% endblock %}

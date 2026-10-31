@@ -79,7 +79,7 @@ def redirect(path: str = "") -> RedirectResponse:
 async def checked_form(request: Request) -> FormData:
     form = await request.form()
     if not csrf_valid(request, form.get("csrf_token")):
-        raise HTTPException(status_code=400, detail="توکن امنیتی (CSRF) نامعتبر است؛ صفحه را دوباره باز کنید.")
+        raise HTTPException(status_code=400, detail="Invalid security token. Reload the page and try again.")
     return form
 
 
@@ -117,13 +117,13 @@ async def login(request: Request):
     keys = [f"ip:{client_ip(request)}", f"user:{username.lower()}"]
     wait = login_limiter.retry_after(keys)
     if wait:
-        flash(request, "error", f"تلاش‌های ناموفق زیاد بود؛ {wait // 60 + 1} دقیقه دیگر دوباره امتحان کنید.")
+        flash(request, "error", f"Too many failed attempts. Try again in {wait // 60 + 1} minutes.")
         return redirect("/login")
     admin = await run_db(Admin.get_or_none, Admin.username == username)
     valid = await run_db(verify_password, password, admin.password_hash if admin else dummy_hash())
     if not admin or not valid:
         login_limiter.failure(keys)
-        flash(request, "error", "نام کاربری یا رمز عبور اشتباه است.")
+        flash(request, "error", "Incorrect username or password.")
         return redirect("/login")
     login_limiter.reset(keys)
     request.session.clear()
@@ -193,14 +193,14 @@ async def servers_add(request: Request):
     result = await run_db(server_service.add_links, str(form.get("links", "")), _bool(form, "is_public"),
                           str(form.get("tags", "")))
     if result.created:
-        flash(request, "success", f"{len(result.created)} سرور اضافه شد.")
+        flash(request, "success", f"Added {len(result.created)} servers.")
         await services(request).after_servers_changed()
     if result.duplicates:
-        flash(request, "warn", "تکراری (اضافه نشد): " + "، ".join(result.duplicates[:10]))
+        flash(request, "warn", "Already exists (not added): " + ", ".join(result.duplicates[:10]))
     for line, excerpt, message in result.errors[:10]:
-        flash(request, "error", f"خط {line}: {message} — {excerpt}")
+        flash(request, "error", f"Line {line}: {message} — {excerpt}")
     if not (result.created or result.duplicates or result.errors):
-        flash(request, "error", "هیچ لینکی وارد نشده است.")
+        flash(request, "error", "No links were entered.")
     return redirect("/servers")
 
 
@@ -272,7 +272,7 @@ async def server_edit(request: Request, server_id: int):
         flash(request, "error", str(exc))
         return redirect(f"/servers/{server_id}/edit")
     await services(request).after_servers_changed([server_id] if before.is_active and not server.is_active else [])
-    flash(request, "success", "تغییرات ذخیره شد.")
+    flash(request, "success", "Changes saved.")
     return redirect("/servers")
 
 
@@ -282,7 +282,7 @@ async def server_delete(request: Request, server_id: int):
     await checked_form(request)
     await run_db(server_service.delete_server, server_id)
     await services(request).after_servers_changed([server_id])
-    flash(request, "success", "سرور حذف شد.")
+    flash(request, "success", "Server deleted.")
     return redirect("/servers")
 
 
@@ -308,7 +308,7 @@ async def server_retry(request: Request, server_id: int):
     await checked_form(request)
     await run_db(server_service.clear_xray_error, server_id)
     await services(request).after_servers_changed()
-    flash(request, "info", "سرور دوباره به Xray اضافه شد.")
+    flash(request, "info", "Server was added to Xray again.")
     return redirect("/servers")
 
 
@@ -345,7 +345,7 @@ async def subscription_add(request: Request):
         url = validate_url(str(form.get("url", "")))
         interval = max(10, min(int(form.get("interval_minutes") or 360), 10080))
     except ValueError as exc:
-        flash(request, "error", str(exc) if "Subscription" in str(exc) else "بازه همگام‌سازی نامعتبر است.")
+        flash(request, "error", str(exc) if "Subscription" in str(exc) else "Invalid sync interval.")
         return redirect("/subscriptions")
     sub = await run_db(Subscription.create, name=str(form.get("name", ""))[:200], url=url, interval_minutes=interval,
                        auto_sync=_bool(form, "auto_sync"), make_public=_bool(form, "make_public"))
@@ -356,8 +356,8 @@ async def subscription_add(request: Request):
 async def _sync_and_flash(request: Request, sub_id: int) -> None:
     try:
         r = await services(request).subscriptions.sync(sub_id)
-        flash(request, "success", f"همگام‌سازی انجام شد ({r.via}): {r.added} جدید، {r.updated} بروزرسانی، "
-                                  f"{len(r.deactivated)} غیرفعال، {len(r.errors)} لینک نامعتبر.")
+        flash(request, "success", f"Sync finished ({r.via}): {r.added} added, {r.updated} updated, "
+                                  f"{len(r.deactivated)} deactivated, {len(r.errors)} invalid links.")
     except (ValueError, LinkParseError) as exc:
         flash(request, "error", str(exc))
 
@@ -383,7 +383,7 @@ async def subscription_edit(request: Request, sub_id: int):
     await run_db(lambda: Subscription.update(
         name=str(form.get("name", ""))[:200], url=url, interval_minutes=interval, auto_sync=_bool(form, "auto_sync"),
         make_public=_bool(form, "make_public")).where(Subscription.id == sub_id).execute())
-    flash(request, "success", "Subscription ذخیره شد.")
+    flash(request, "success", "Subscription saved.")
     return redirect("/subscriptions")
 
 
@@ -402,7 +402,7 @@ async def subscription_delete(request: Request, sub_id: int):
 
     removed = await run_db(remove)
     await services(request).after_servers_changed(removed)
-    flash(request, "success", "Subscription حذف شد" + (f" همراه با {len(removed)} سرور." if removed else "."))
+    flash(request, "success", "Subscription deleted" + (f" along with {len(removed)} servers." if removed else "."))
     return redirect("/subscriptions")
 
 
@@ -482,7 +482,7 @@ async def settings_save(request: Request):
     svc.stats.invalidate()
     if values.get("check_interval") != old_interval:
         svc.checker.wake()
-    flash(request, "success", "تنظیمات ذخیره شد.")
+    flash(request, "success", "Settings saved.")
     return redirect("/settings")
 
 
@@ -511,7 +511,7 @@ async def telegram_save(request: Request):
             flash(request, "error", error)
         return redirect("/telegram")
     await run_db(settings.set_many, values, True)
-    flash(request, "success", "تنظیمات تلگرام ذخیره شد.")
+    flash(request, "success", "Telegram settings saved.")
     return redirect("/telegram")
 
 
@@ -520,7 +520,7 @@ async def telegram_test(request: Request):
     await require_admin(request)
     await checked_json(request)
     if not settings.get("telegram_token") or not settings.chat_ids():
-        return JSONResponse({"ok": False, "results": [], "error": "ابتدا Bot Token و Chat ID را ذخیره کنید."})
+        return JSONResponse({"ok": False, "results": [], "error": "Save a bot token and chat ID first."})
     results = await services(request).notifier.send_test()
     return {"ok": any(r["ok"] for r in results), "results": results}
 
@@ -538,7 +538,7 @@ async def password_change(request: Request):
     admin = await require_admin(request)
     form = await checked_form(request)
     if not await run_db(verify_password, str(form.get("current", "")), admin.password_hash):
-        flash(request, "error", "رمز فعلی اشتباه است.")
+        flash(request, "error", "Current password is incorrect.")
         return redirect("/password")
     new = str(form.get("new", ""))
     error = validate_password(new, str(form.get("confirm", "")))
@@ -549,7 +549,7 @@ async def password_change(request: Request):
     admin.password_changed_at = max(now_ts(), admin.password_changed_at + 1)
     await run_db(admin.save)
     request.session["pwd_at"] = admin.password_changed_at  # keep this session, invalidate others
-    flash(request, "success", "رمز عبور تغییر کرد.")
+    flash(request, "success", "Password changed.")
     return redirect("/password")
 
 
@@ -577,14 +577,14 @@ async def backup_import(request: Request):
     form = await checked_form(request)
     upload = form.get("file")
     if not isinstance(upload, UploadFile):
-        flash(request, "error", "فایلی انتخاب نشده است.")
+        flash(request, "error", "No file was selected.")
         return redirect("/backup")
     raw = await upload.read(20 * 1024 * 1024 + 1)
     try:
         data = json.loads(raw.decode("utf-8"))
         summary = await run_db(backup_service.import_data, data, form.get("mode") == "replace")
     except (UnicodeDecodeError, json.JSONDecodeError):
-        flash(request, "error", "فایل JSON معتبر نیست.")
+        flash(request, "error", "The file is not valid JSON.")
         return redirect("/backup")
     except ValueError as exc:
         flash(request, "error", str(exc))
@@ -593,8 +593,8 @@ async def backup_import(request: Request):
     if form.get("mode") == "replace":
         await run_db(svc.incidents.restore)
     await svc.after_servers_changed()
-    flash(request, "success", f"بازیابی انجام شد: {summary['servers']} سرور، {summary['subscriptions']} Subscription، "
-                              f"{summary['settings']} تنظیم ({summary['skipped']} تکراری).")
+    flash(request, "success", f"Import finished: {summary['servers']} servers, {summary['subscriptions']} subscriptions, "
+                              f"{summary['settings']} settings ({summary['skipped']} skipped).")
     for error in summary["errors"][:10]:
         flash(request, "warn", error)
     return redirect("/backup")

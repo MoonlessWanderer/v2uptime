@@ -175,9 +175,9 @@ def test_ss_legacy_format():
 
 
 def test_ss_rejects_plugin_and_stream_cipher():
-    with pytest.raises(LinkParseError, match="پلاگین"):
+    with pytest.raises(LinkParseError, match="plugin"):
         parse_link(f"ss://{b64('aes-256-gcm:pass')}@1.2.3.4:8388/?plugin=obfs-local%3Bobfs%3Dhttp#x")
-    with pytest.raises(LinkParseError, match="رمزنگاری"):
+    with pytest.raises(LinkParseError, match="Unsupported Shadowsocks method"):
         parse_link(f"ss://{b64('aes-256-cfb:pass')}@1.2.3.4:8388#x")
 
 
@@ -186,16 +186,16 @@ def test_ss_rejects_plugin_and_stream_cipher():
 @pytest.mark.parametrize(
     "link, fragment",
     [
-        ("", "خالی"),
-        ("http://example.com", "پشتیبانی نمی‌شود"),
-        ("hysteria2://pw@1.2.3.4:443", "پشتیبانی نمی‌شود"),
-        ("foo://bar", "ناشناخته"),
-        ("just text", "پروتکل"),
-        (f"vless://@host.com:443", "UUID"),
-        (f"vless://{UUID}@host.com", "پورت"),
-        (f"vless://{UUID}@host.com:99999", "پورت"),
-        (f"vless://{UUID}@host.com:443?type=h2", "حذف"),
-        (f"vless://{UUID}@host.com:443?type=quic", "حذف"),
+        ("", "empty"),
+        ("http://example.com", 'unsupported protocol "http"'),
+        ("hysteria2://pw@1.2.3.4:443", 'unsupported protocol "hysteria2"'),
+        ("foo://bar", "Unknown protocol"),
+        ("just text", "protocol"),
+        (f"vless://@host.com:443", "user id"),
+        (f"vless://{UUID}@host.com", "port"),
+        (f"vless://{UUID}@host.com:99999", "port"),
+        (f"vless://{UUID}@host.com:443?type=h2", "removed"),
+        (f"vless://{UUID}@host.com:443?type=quic", "removed"),
         (f"vless://{UUID}@host.com:443?security=reality&sni=a.com", "pbk"),
         (f"vless://{UUID}@host.com:443?security=reality&pbk={PBK}", "sni"),
         (f"vless://{UUID}@host.com:443?flow=bad-flow", "flow"),

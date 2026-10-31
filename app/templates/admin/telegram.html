@@ -1,8 +1,8 @@
 {% extends "admin/base.html" %}
 {% from "admin/_fields.html" import field %}
-{% block page_title %}ربات تلگرام{% endblock %}
+{% block page_title %}Telegram{% endblock %}
 {% block content %}
-<div class="page-head"><h1>ربات تلگرام</h1></div>
+<div class="page-head"><h1>Telegram bot</h1></div>
 
 <div class="grid-2">
   <form method="post" action="{{ admin_url('/telegram') }}" class="panel">
@@ -13,37 +13,37 @@
       {% for d in defs %}{{ field(d, values[d.key], masked_token if d.key == 'telegram_token' else '', servers) }}{% endfor %}
     </div>
     {% endfor %}
-    <p class="help muted">آستانه‌های قطع/وصل همان N/M صفحه تنظیمات هستند. در حالت خودکار ابتدا ارسال مستقیم (۵ ثانیه) امتحان می‌شود و در صورت شکست از طریق سرورهای آنلاین (تا ۴ سرور).</p>
-    <div class="form-actions"><button class="btn btn-primary" type="submit">ذخیره</button></div>
+    <p class="help muted">Down and up thresholds are the N and M values on the Settings page. Automatic mode tries a direct send (5 seconds), then up to 4 online servers.</p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Save</button></div>
   </form>
 
   <div>
     <section class="panel">
-      <h2>ارسال پیام تست</h2>
-      <p class="muted">پیام فوراً (بدون صف) به همه Chat IDها ارسال می‌شود و مسیر ارسال نمایش داده می‌شود. ابتدا تنظیمات را ذخیره کنید.</p>
-      <button type="button" class="btn" id="telegram-test" data-url="{{ admin_url('/telegram/test') }}"><svg class="ic"><use href="#i-send"/></svg>ارسال پیام تست</button>
+      <h2>Send a test message</h2>
+      <p class="muted">The message is sent immediately (not queued) to every chat ID, and the route is shown here. Save the settings first.</p>
+      <button type="button" class="btn" id="telegram-test" data-url="{{ admin_url('/telegram/test') }}"><svg class="ic"><use href="#i-send"/></svg>Send test message</button>
       <div id="telegram-test-result" style="margin-top:12px"></div>
     </section>
     <section class="panel">
-      <h2>وضعیت صف</h2>
+      <h2>Queue</h2>
       <dl class="kv">
-        <dt>در صف</dt><dd>{{ queue.pending }}{% if queue.oldest_pending %} (قدیمی‌ترین: {{ queue.oldest_pending|time_tag("ago") }}){% endif %}</dd>
-        <dt>ارسال ۲۴ ساعت</dt><dd>{{ queue.sent_24h }}</dd>
-        <dt>ناموفق دائمی</dt><dd>{{ queue.failed }}</dd>
-        <dt>آخرین ارسال</dt><dd>{{ queue.last_sent_at|time_tag("datetime") }}{% if queue.last_via %} · {{ queue.last_via }}{% endif %}</dd>
-        <dt>آخرین خطا</dt><dd>{{ queue.last_error or '—' }}</dd>
-        <dt>مسیر کش‌شده</dt><dd class="ltr">{{ last_route or '—' }}</dd>
-        {% if bot_error %}<dt>خطای دستورها</dt><dd>{{ bot_error }}</dd>{% endif %}
+        <dt>Queued</dt><dd>{{ queue.pending }}{% if queue.oldest_pending %} (oldest: {{ queue.oldest_pending|time_tag("ago") }}){% endif %}</dd>
+        <dt>Sent, 24h</dt><dd>{{ queue.sent_24h }}</dd>
+        <dt>Permanently failed</dt><dd>{{ queue.failed }}</dd>
+        <dt>Last sent</dt><dd>{{ queue.last_sent_at|time_tag("datetime") }}{% if queue.last_via %} · <bdi>{{ queue.last_via }}</bdi>{% endif %}</dd>
+        <dt>Last error</dt><dd>{{ queue.last_error or '—' }}</dd>
+        <dt>Cached route</dt><dd class="ltr"><bdi>{{ last_route or '—' }}</bdi></dd>
+        {% if bot_error %}<dt>Command error</dt><dd>{{ bot_error }}</dd>{% endif %}
       </dl>
     </section>
     <section class="panel">
-      <h2>دستورهای ربات</h2>
+      <h2>Bot commands</h2>
       <ul class="muted">
-        <li><code>/status</code> وضعیت لحظه‌ای همه سرورها</li>
-        <li><code>/report</code> گزارش ۲۴ ساعت</li>
-        <li><code>/incidents</code> آخرین ۱۰ قطعی</li>
+        <li><code>/status</code> live status of every server</li>
+        <li><code>/report</code> report for the last 24 hours</li>
+        <li><code>/incidents</code> the 10 most recent incidents</li>
       </ul>
-      <p class="help muted">فقط به Chat IDهای ثبت‌شده پاسخ داده می‌شود.</p>
+      <p class="help muted">Only registered chat IDs get a reply.</p>
     </section>
   </div>
 </div>

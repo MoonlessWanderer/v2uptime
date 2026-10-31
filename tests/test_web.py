@@ -127,7 +127,7 @@ def test_login_success_and_dashboard(client, seeded):
     response = login(client)
     assert response.status_code == 303 and response.headers["location"] == "/admin/"
     dashboard = client.get("/admin")
-    assert dashboard.status_code == 200 and "داشبورد" in dashboard.text
+    assert dashboard.status_code == 200 and "Dashboard" in dashboard.text
     for path in ("/admin/servers", "/admin/subscriptions", "/admin/incidents", "/admin/settings",
                  "/admin/telegram", "/admin/password", "/admin/backup", f"/admin/servers/{seeded[0].id}",
                  f"/admin/servers/{seeded[0].id}/edit"):
@@ -141,7 +141,7 @@ def test_login_rate_limit(client):
         login(client, password="wrong-password")
     response = login(client)  # correct password, but blocked now
     assert response.headers["location"] == "/admin/login"
-    assert "تلاش‌های ناموفق" in client.get("/admin/login").text
+    assert "Too many failed attempts" in client.get("/admin/login").text
 
 
 def test_session_cookie_flags(app_factory):
@@ -170,9 +170,9 @@ def test_add_servers_and_settings_validation(client):
                            follow_redirects=True)
     assert response.status_code == 200
     assert Server.select().count() == 2
-    assert "خط ۳" in response.text or "خط 3" in response.text
+    assert "Line 3:" in response.text
     bad = client.post("/admin/settings", data={"csrf_token": token, "check_interval": "5"}, follow_redirects=True)
-    assert "نباید کمتر" in bad.text
+    assert "Must be at least" in bad.text
     assert settings.get("check_interval") == 60
 
 
@@ -211,3 +211,41 @@ def test_password_change_invalidates_other_sessions(app_factory):
         assert response.status_code == 200
         assert first.get("/admin", follow_redirects=False).status_code == 200
         assert second.get("/admin", follow_redirects=False).status_code == 303
+
+
+ARABIC = re.compile(r"[\u0600-\u06FF]")
+
+
+def _assert_latin(label, text):
+    match = ARABIC.search(text)
+    assert match is None, f"{label} contains U+{ord(match.group()):04X}"
+
+
+def test_rendered_pages_and_api_are_english(client, seeded):
+    visible = seeded[0]
+    _assert_latin("public", client.get("/").text)
+    _assert_latin("login", client.get("/admin/login").text)
+    login(client)
+    for path in ("/admin", "/admin/servers", "/admin/subscriptions", "/admin/incidents", "/admin/settings",
+                 "/admin/telegram", "/admin/password", "/admin/backup",
+                 f"/admin/servers/{visible.id}", f"/admin/servers/{visible.id}/edit"):
+        response = client.get(path)
+        assert response.status_code == 200, path
+        _assert_latin(path, response.text)
+    status = client.get("/api/status?range=24h")
+    history = client.get(f"/api/servers/{visible.id}/history")
+    missing = client.get("/api/servers/9999/history")
+    assert missing.json()["detail"] == "Server not found"
+    for label, response in ("status", status), ("history", history), ("missing", missing):
+        _assert_latin(label, response.text)
+
+
+def test_persian_server_name_is_isolated(client):
+    name = "آلمان"
+    make_server(name, port=21001)
+    page = client.get("/")
+    assert page.status_code == 200
+    assert f"<bdi>{name}</bdi>" in page.text
+    login(client)
+    admin = client.get("/admin/servers")
+    assert f"<bdi>{name}</bdi>" in admin.text

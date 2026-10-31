@@ -42,17 +42,17 @@ E_MONITOR_NET = "monitor_network"
 E_UNKNOWN = "unknown"
 
 ERROR_LABELS: dict[str, str] = {
-    E_TIMEOUT: "تایم‌اوت",
-    E_REFUSED: "اتصال رد شد",
-    E_RESET: "اتصال قطع شد",
-    E_TLS: "خطای TLS",
-    E_DNS: "خطای DNS",
-    E_HTTP: "کد HTTP نامعتبر",
-    E_PROXY: "خطای پروکسی",
-    E_NETWORK: "خطای شبکه",
-    E_XRAY: "Xray در دسترس نیست",
-    E_MONITOR_NET: "قطعی شبکه سرور مانیتور",
-    E_UNKNOWN: "خطای نامشخص",
+    E_TIMEOUT: "Timeout",
+    E_REFUSED: "Connection refused",
+    E_RESET: "Connection reset",
+    E_TLS: "TLS error",
+    E_DNS: "DNS error",
+    E_HTTP: "Invalid HTTP status",
+    E_PROXY: "Proxy error",
+    E_NETWORK: "Network error",
+    E_XRAY: "Xray unavailable",
+    E_MONITOR_NET: "Monitor network outage",
+    E_UNKNOWN: "Unknown error",
 }
 
 
@@ -203,7 +203,7 @@ class Checker:
         """Manual test from the admin panel; not recorded."""
         port = self.xray.loaded_ports().get(server_id)
         if port is None:
-            return ProbeResult(False, None, E_XRAY, "این سرور در Xray بارگذاری نشده است.")
+            return ProbeResult(False, None, E_XRAY, "This server is not loaded in Xray.")
         return await self.check_server(port, settings.get("check_timeout"), settings.get("test_url"))
 
     async def run_cycle(self) -> CycleReport:

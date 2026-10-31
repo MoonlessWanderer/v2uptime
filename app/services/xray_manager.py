@@ -70,7 +70,7 @@ def _next_free_port(base: int, reserved: set[int]) -> int:
     for port in range(base, min(base + PORT_SCAN_SPAN, 65535)):
         if port not in reserved and port_is_free(port):
             return port
-    raise RuntimeError("هیچ پورت آزادی برای inbound پیدا نشد.")
+    raise RuntimeError("No free port for an inbound.")
 
 
 def desired_entries(port_base: int, api_port: int, keep_ports: set[int]) -> list[XrayEntry]:
@@ -101,7 +101,7 @@ def desired_entries(port_base: int, api_port: int, keep_ports: set[int]) -> list
             try:
                 entries.append(XrayEntry.create(server.id, port, server.outbound))
             except (TypeError, ValueError):
-                Server.update(xray_error="خروجی ذخیره‌شده خراب است").where(Server.id == server.id).execute()
+                Server.update(xray_error="Stored outbound is corrupt").where(Server.id == server.id).execute()
     return entries
 
 
@@ -194,7 +194,7 @@ class XrayManager:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         if not self.installed:
             self.state = "missing"
-            self.last_error = f"فایل Xray پیدا نشد: {self.bin}"
+            self.last_error = f"Xray binary not found: {self.bin}"
             log.error("xray binary not found", extra={"path": str(self.bin)})
             return False
         self.version = await self.read_version()
@@ -344,7 +344,7 @@ class XrayManager:
         ports = [self.cfg.xray_api_port] + [e.port for e in entries]
         if not await self._wait_ports(ports, 20.0, proc):
             tail = " | ".join(list(self.output)[-3:])
-            self.last_error = f"Xray آماده نشد: {tail}"[:500]
+            self.last_error = f"Xray did not become ready: {tail}"[:500]
             log.error("xray failed to become ready", extra={"tail": tail[:300]})
             await self._stop_process()
             return False
@@ -399,7 +399,7 @@ class XrayManager:
         self.crashes += 1
         self.state = "crashed"
         detail = list(self.output)[-1] if self.output else ""
-        self.last_error = f"Xray متوقف شد (کد خروج {code})"
+        self.last_error = f"Xray stopped (exit code {code})"
         log.error("xray crashed", extra={"code": code, "last_line": detail[:300]})
         self._on_event("xray_crash", {"code": code, "detail": detail[:300]})
         delay = 1.0

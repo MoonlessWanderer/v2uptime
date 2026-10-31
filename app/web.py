@@ -78,6 +78,11 @@ def _coerce_ts(value: Any) -> int | None:
     return None
 
 
+def bidi(value: object) -> str:
+    """Unicode isolates for a name inside an attribute (confirm dialogs, titles)."""
+    return f"\u2068{'' if value is None else value}\u2069"
+
+
 def time_tag(value: Any, kind: str = "time") -> Markup | str:
     """`<time datetime="…Z" title="YYYY-MM-DD HH:mm:ss UTC+00:00">…</time>`."""
     ts = _coerce_ts(value)
@@ -104,7 +109,7 @@ templates.env.globals.update(
     flag_emoji=flag_emoji, tz_label=tz_label,
 )
 templates.env.filters.update(
-    time_tag=time_tag, duration=fmt_duration, percent=fmt_percent, ago=fmt_ago, ms=fmt_ms,
+    time_tag=time_tag, bidi=bidi, duration=fmt_duration, percent=fmt_percent, ago=fmt_ago, ms=fmt_ms,
     error_label=error_label, status_label=lambda s: STATUS_LABELS.get(s, s),
 )
 

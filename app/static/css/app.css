@@ -106,7 +106,7 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  font-family: "Vazirmatn", Tahoma, "Segoe UI", system-ui, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Vazirmatn";
   font-size: 15px;
   line-height: 1.65;
   color: var(--text);
@@ -259,7 +259,7 @@ time, .num, .metrics dd, .m-stat b { font-variant-numeric: tabular-nums; }
   font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-2);
   direction: ltr; font-weight: 600;
 }
-.chip-tag { background: var(--accent-soft); color: var(--accent); direction: rtl; }
+.chip-tag { background: var(--accent-soft); color: var(--accent); }
 .rank-chip { font-size: 11.5px; padding: 1px 8px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); font-weight: 700; }
 .view-fastest .rank-fastest:not(:empty), .view-stable .rank-stable:not(:empty) { display: inline-block !important; }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 0 0 12px; }
@@ -279,7 +279,6 @@ time, .num, .metrics dd, .m-stat b { font-variant-numeric: tabular-nums; }
 .lv-major { background: var(--lv-major); }
 .lv-down { background: var(--lv-down); }
 .bars-axis { display: flex; justify-content: space-between; direction: ltr; font-size: 11px; color: var(--muted); margin-top: 3px; }
-.bars-axis span:first-child { direction: rtl; }
 .spark-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
 .spark { flex: 1; height: 34px; min-width: 0; overflow: visible; }
 .spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
@@ -349,7 +348,7 @@ time, .num, .metrics dd, .m-stat b { font-variant-numeric: tabular-nums; }
 .admin-body { display: flex; flex: 1; min-width: 0; }
 .sidenav {
   position: fixed; inset-block: 57px 0; inset-inline-start: 0; z-index: 25; width: 240px; padding: 12px;
-  background: var(--surface); border-inline-end: 1px solid var(--border); transform: translateX(100%);
+  background: var(--surface); border-inline-end: 1px solid var(--border); transform: translateX(-100%);
   transition: transform .2s; overflow-y: auto;
 }
 .sidenav.is-open { transform: none; box-shadow: var(--shadow-lg); }
@@ -437,7 +436,7 @@ tr.drop-target td { box-shadow: inset 0 2px 0 var(--accent); }
 }
 .log-box {
   background: var(--surface-2); border-radius: 10px; padding: 10px; max-height: 260px; overflow: auto;
-  font-size: 12px; white-space: pre-wrap; word-break: break-all; direction: ltr; text-align: left;
+  font-size: 12px; white-space: pre-wrap; word-break: break-all;
 }
 .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
 .filter-bar .field { min-width: 160px; }

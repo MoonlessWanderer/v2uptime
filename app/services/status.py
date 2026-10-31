@@ -24,7 +24,7 @@ DEGRADED = "degraded"
 OFFLINE = "offline"
 UNKNOWN = "unknown"
 
-STATUS_LABELS = {ONLINE: "آنلاین", DEGRADED: "ناپایدار", OFFLINE: "قطع", UNKNOWN: "نامشخص"}
+STATUS_LABELS = {ONLINE: "Online", DEGRADED: "Degraded", OFFLINE: "Down", UNKNOWN: "Unknown"}
 STATUS_EMOJI = {ONLINE: "🟢", DEGRADED: "🟡", OFFLINE: "🔴", UNKNOWN: "⚪"}
 
 MIN_VALID_FOR_STATUS = 2

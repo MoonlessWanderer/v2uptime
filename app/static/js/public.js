@@ -112,9 +112,9 @@
     bar.classList.add("is-hover");
     var labels = bucketLabels();
     var u = bar.getAttribute("data-u"), n = parseInt(bar.getAttribute("data-n") || "0", 10);
-    var lines = "<strong>" + (u === "" ? "بدون داده" : u + "% آپتایم") + "</strong>";
+    var lines = "<strong>" + (u === "" ? "No data" : u + "% uptime") + "</strong>";
     lines += esc(labels[+bar.getAttribute("data-i")] || "");
-    if (n > 0) lines += "<br>" + n + " قطعی";
+    if (n > 0) lines += "<br>" + n + " incidents";
     tooltip.innerHTML = lines;
     tooltip.hidden = false;
     var r = bar.getBoundingClientRect(), t = tooltip.getBoundingClientRect();
@@ -198,14 +198,14 @@
         document.getElementById("m-sub").textContent = s.protocol.toUpperCase() + " · " + s.transport + " · " + s.status_label;
         var sum = data.summary, inc = data.incident_stats;
         var stats = [
-          ["آپتایم " + data.range_label, pct(sum.uptime)],
-          ["میانگین پینگ", ms(sum.avg_latency)],
-          ["کمترین / بیشترین", (sum.min_latency === null ? "—" : sum.min_latency + " / " + sum.max_latency) + " ms"],
-          ["نوسان (jitter)", ms(sum.jitter)],
-          ["تعداد قطعی", String(inc.count)],
-          ["مجموع قطعی", inc.downtime_label],
-          ["میانگین زمان برگشت", inc.mttr_label],
-          ["امتیاز پایداری", s.stability === null ? "—" : String(s.stability)]
+          ["Uptime " + data.range_label, pct(sum.uptime)],
+          ["Average ping", ms(sum.avg_latency)],
+          ["Min / max", (sum.min_latency === null ? "—" : sum.min_latency + " / " + sum.max_latency) + " ms"],
+          ["Jitter", ms(sum.jitter)],
+          ["Incidents", String(inc.count)],
+          ["Total downtime", inc.downtime_label],
+          ["Mean time to recover", inc.mttr_label],
+          ["Stability score", s.stability === null ? "—" : String(s.stability)]
         ];
         document.getElementById("m-stats").innerHTML = stats.map(function (p) {
           return '<div class="m-stat"><span>' + esc(p[0]) + "</span><b>" + esc(p[1]) + "</b></div>";
@@ -219,13 +219,13 @@
         });
         var list = document.getElementById("m-incidents");
         list.innerHTML = data.incidents.length ? data.incidents.map(function (i) {
-          return "<li><span>" + esc(i.start_label) + (i.end_label ? " تا " + esc(i.end_label) : "") + "</span>" +
-            '<span class="' + (i.ongoing ? "ongoing" : "") + '">' + (i.ongoing ? "ادامه دارد · " : "") + esc(i.duration_label) +
+          return "<li><span>" + esc(i.start_label) + (i.end_label ? " to " + esc(i.end_label) : "") + "</span>" +
+            '<span class="' + (i.ongoing ? "ongoing" : "") + '">' + (i.ongoing ? "Ongoing · " : "") + esc(i.duration_label) +
             " · " + esc(i.error_label) + "</span></li>";
-        }).join("") : '<li><span class="muted">در این بازه قطعی ثبت نشده است.</span></li>';
+        }).join("") : '<li><span class="muted">No incidents in this range.</span></li>';
       })
       .catch(function () {
-        document.getElementById("m-stats").innerHTML = '<p class="muted">دریافت اطلاعات ممکن نشد.</p>';
+        document.getElementById("m-stats").innerHTML = '<p class="muted">Could not load details.</p>';
       })
       .then(function () { document.getElementById("m-body").classList.remove("loading"); });
   }

@@ -97,8 +97,8 @@ class TelegramNotifier:
         stable_ids = rank_stable(metrics.values())
         fastest = (names[fastest_ids[0]], metrics[fastest_ids[0]].median_1h) if fastest_ids else None
         stable = (names[stable_ids[0]], metrics[stable_ids[0]].stability) if stable_ids else None
-        title = "گزارش روزانه" if days == 1 else "گزارش هفتگی"
-        period = "۲۴ ساعت اخیر" if days == 1 else "۷ روز اخیر"
+        title = "Daily report" if days == 1 else "Weekly report"
+        period = "24h" if days == 1 else "7d"
         return messages.report(title, period, rows, fastest, stable, now)
 
     def build_status(self) -> list[str]:

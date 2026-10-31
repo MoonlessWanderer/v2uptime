@@ -5,13 +5,13 @@
 <header class="hero">
   <div class="container hero-inner">
     <div class="hero-text">
-      <h1>{{ data.site.title }}</h1>
-      {% if data.site.description %}<p class="hero-desc">{{ data.site.description }}</p>{% endif %}
+      <h1><bdi>{{ data.site.title }}</bdi></h1>
+      {% if data.site.description %}<p class="hero-desc"><bdi>{{ data.site.description }}</bdi></p>{% endif %}
       {% if data.site.location %}
-      <p class="location"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>محل انجام تست: <strong>{{ data.site.location }}</strong></p>
+      <p class="location"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>Test location: <strong><bdi>{{ data.site.location }}</bdi></strong></p>
       {% endif %}
     </div>
-    <button class="icon-btn theme-toggle" type="button" aria-label="تغییر حالت روشن/تاریک" data-theme-toggle>
+    <button class="icon-btn theme-toggle" type="button" aria-label="Toggle color theme" data-theme-toggle>
       <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg>
       <svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
     </button>
@@ -19,37 +19,37 @@
 </header>
 
 <main class="container" id="main">
-  <div class="toolbar" role="region" aria-label="نمایش و فیلتر">
-    <div class="tabs" role="tablist" aria-label="مرتب‌سازی">
-      <button role="tab" type="button" class="tab is-active" data-tab="all" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg>همه</button>
-      <button role="tab" type="button" class="tab" data-tab="fastest" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>سریع‌ترین</button>
-      <button role="tab" type="button" class="tab" data-tab="stable" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>پایدارترین</button>
+  <div class="toolbar" role="region" aria-label="View and filters">
+    <div class="tabs" role="tablist" aria-label="Sort">
+      <button role="tab" type="button" class="tab is-active" data-tab="all" aria-selected="true"><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg>All</button>
+      <button role="tab" type="button" class="tab" data-tab="fastest" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>Fastest</button>
+      <button role="tab" type="button" class="tab" data-tab="stable" aria-selected="false"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>Most stable</button>
     </div>
-    <div class="segmented" role="group" aria-label="بازه زمانی" id="range-switch">
+    <div class="segmented" role="group" aria-label="Time range" id="range-switch">
       {% for key, label in ranges.items() %}
       <a href="?range={{ key }}" class="seg{{ ' is-active' if data.range == key }}" data-range="{{ key }}" aria-pressed="{{ 'true' if data.range == key else 'false' }}">{{ label }}</a>
       {% endfor %}
     </div>
     <label class="search">
       <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
-      <input type="search" id="q" placeholder="جستجوی نام، پروتکل، برچسب…" autocomplete="off" aria-label="جستجو">
+      <input type="search" id="q" placeholder="Search name, protocol, tag…" autocomplete="off" aria-label="Search">
     </label>
-    <div class="filters" role="group" aria-label="فیلتر وضعیت">
-      <button type="button" class="filter is-active" data-filter="all">همه</button>
-      <button type="button" class="filter f-online" data-filter="online">آنلاین</button>
-      <button type="button" class="filter f-degraded" data-filter="degraded">ناپایدار</button>
-      <button type="button" class="filter f-offline" data-filter="offline">قطع</button>
+    <div class="filters" role="group" aria-label="Status filter">
+      <button type="button" class="filter is-active" data-filter="all">All</button>
+      <button type="button" class="filter f-online" data-filter="online">Online</button>
+      <button type="button" class="filter f-degraded" data-filter="degraded">Degraded</button>
+      <button type="button" class="filter f-offline" data-filter="offline">Down</button>
     </div>
   </div>
 
   <div id="live" aria-live="polite" data-range="{{ data.range }}">
     {% include "public/_live.html" %}
   </div>
-  <p class="empty-filter" id="empty-filter" hidden>سروری با این فیلتر پیدا نشد.</p>
+  <p class="empty-filter" id="empty-filter" hidden>No servers match this filter.</p>
 </main>
 
 <footer class="site-footer container">
-  <p>صفحه هر ۶۰ ثانیه به‌صورت خودکار بروز می‌شود. وضعیت‌ها حاصل تست واقعی اتصال از محل تست است.</p>
+  <p>This page refreshes automatically every 60 seconds. Status comes from a real connection test.</p>
   <p>Times are shown in {{ tz_label(settings.tz) }} ({{ settings.tz }})</p>
 </footer>
 
@@ -60,26 +60,26 @@
   <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="m-title">
     <header class="modal-head">
       <div>
-        <h2 id="m-title">…</h2>
+        <h2 id="m-title" dir="auto">…</h2>
         <p class="modal-sub" id="m-sub"></p>
       </div>
-      <button type="button" class="icon-btn" data-close aria-label="بستن"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
+      <button type="button" class="icon-btn" data-close aria-label="Close"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg></button>
     </header>
-    <div class="segmented" role="group" aria-label="بازه نمودار" id="m-range">
+    <div class="segmented" role="group" aria-label="Chart range" id="m-range">
       {% for key, label in ranges.items() %}<button type="button" class="seg" data-range="{{ key }}">{{ label }}</button>{% endfor %}
     </div>
     <div class="modal-body" id="m-body">
       <div class="m-stats" id="m-stats"></div>
       <section class="chart-block">
-        <h4>پینگ (میلی‌ثانیه)</h4>
-        <div class="chart"><canvas id="m-latency" aria-label="نمودار پینگ"></canvas></div>
+        <h4>Ping (ms)</h4>
+        <div class="chart"><canvas id="m-latency" aria-label="Ping chart"></canvas></div>
       </section>
       <section class="chart-block">
-        <h4>آپتایم (٪)</h4>
-        <div class="chart"><canvas id="m-uptime" aria-label="نمودار آپتایم"></canvas></div>
+        <h4>Uptime (%)</h4>
+        <div class="chart"><canvas id="m-uptime" aria-label="Uptime chart"></canvas></div>
       </section>
       <section class="chart-block">
-        <h4>قطعی‌ها</h4>
+        <h4>Incidents</h4>
         <ul class="incident-list" id="m-incidents"></ul>
       </section>
     </div>

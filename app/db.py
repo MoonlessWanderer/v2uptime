@@ -43,6 +43,7 @@ def init_db(path: str | Path) -> SqliteDatabase:
     database.create_tables(ALL_MODELS, safe=True)
     _add_missing_columns(database, ALL_MODELS)
     _drop_retired_settings()
+    _migrate_legacy_defaults()
     return database
 
 
@@ -53,6 +54,17 @@ def _drop_retired_settings() -> None:
     removed = Setting.delete().where(Setting.key == "use_jalali").execute()
     if removed:
         log.info("migration: removed retired setting", extra={"key": "use_jalali"})
+
+
+def _migrate_legacy_defaults() -> None:
+    """Replace untouched built-in copy. Custom admin values are left alone."""
+    from app.legacy_defaults import LEGACY_DEFAULTS
+    from app.models import Setting
+
+    for key, old, new in LEGACY_DEFAULTS:
+        updated = Setting.update(value=new).where((Setting.key == key) & (Setting.value == old)).execute()
+        if updated:
+            log.info("migration: replaced legacy default", extra={"key": key})
 
 
 def _add_missing_columns(database: SqliteDatabase, models: list[type]) -> None:

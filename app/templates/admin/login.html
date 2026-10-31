@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}ورود · {{ settings.get('site_title') }}{% endblock %}
+{% block title %}Sign in · {{ settings.get('site_title') }}{% endblock %}
 {% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 {% block body %}
 <div class="login-wrap">
   <form class="panel login-card" method="post" action="{{ admin_url('/login') }}" autocomplete="on">
-    <h1>ورود به پنل مدیریت</h1>
-    <p class="muted">{{ settings.get('site_title') }}</p>
+    <h1>Admin sign in</h1>
+    <p class="muted"><bdi>{{ settings.get('site_title') }}</bdi></p>
     {% for kind, message in flashes %}<div class="alert alert-{{ kind }}" role="alert">{{ message }}</div>{% endfor %}
     {% if not has_admin %}
-    <div class="alert alert-warn">هنوز ادمینی ساخته نشده است. روی سرور اجرا کنید:<br><code>python3 main.py create-admin -u admin</code></div>
+    <div class="alert alert-warn">No admin account exists yet. On the server, run:<br><code>python3 main.py create-admin -u admin</code></div>
     {% endif %}
     <input type="hidden" name="csrf_token" value="{{ csrf }}">
     <div class="field">
-      <label for="username">نام کاربری</label>
+      <label for="username">Username</label>
       <input type="text" id="username" name="username" required autocomplete="username" class="ltr" autofocus>
     </div>
     <div class="field" style="margin-top:12px">
-      <label for="password">رمز عبور</label>
+      <label for="password">Password</label>
       <input type="password" id="password" name="password" required autocomplete="current-password" class="ltr">
     </div>
-    <div class="form-actions"><button class="btn btn-primary" type="submit" style="width:100%">ورود</button></div>
+    <div class="form-actions"><button class="btn btn-primary" type="submit" style="width:100%">Sign in</button></div>
   </form>
 </div>
 {% endblock %}

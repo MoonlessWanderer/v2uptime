@@ -51,7 +51,7 @@
       btn.disabled = true;
       post(base + "/servers/" + btn.getAttribute("data-id") + "/toggle", { flag: btn.getAttribute("data-toggle") })
         .then(function () { location.reload(); })
-        .catch(function () { btn.disabled = false; toast("خطا در ذخیره"); });
+        .catch(function () { btn.disabled = false; toast("Could not save"); });
     });
   });
 
@@ -61,15 +61,15 @@
       var id = btn.getAttribute("data-test");
       var out = document.querySelector('[data-result-for="' + id + '"]');
       btn.disabled = true;
-      out.textContent = "در حال تست…";
+      out.textContent = "Testing…";
       out.className = "test-result muted";
       post(base + "/servers/" + id + "/test")
         .then(function (r) {
           out.className = "test-result pill " + (r.ok ? "pill-ok" : "pill-bad");
-          out.textContent = r.ok ? "موفق · " + r.latency_ms + " ms" : "ناموفق · " + r.error;
+          out.textContent = r.ok ? "OK · " + r.latency_ms + " ms" : "Failed · " + r.error;
           if (!r.ok && r.detail) out.title = r.detail;
         })
-        .catch(function () { out.textContent = "خطا"; })
+        .catch(function () { out.textContent = "Error"; })
         .then(function () { btn.disabled = false; });
     });
   });
@@ -81,8 +81,8 @@
     var dragged = null;
     var saveOrder = function () {
       var ids = Array.prototype.map.call(tbody.querySelectorAll("tr[data-id]"), function (tr) { return tr.getAttribute("data-id"); });
-      post(base + "/servers/reorder", { ids: ids }).then(function () { toast("ترتیب ذخیره شد"); })
-        .catch(function () { toast("خطا در ذخیره ترتیب"); });
+      post(base + "/servers/reorder", { ids: ids }).then(function () { toast("Order saved"); })
+        .catch(function () { toast("Could not save the order"); });
     };
     tbody.addEventListener("dragstart", function (e) {
       dragged = e.target.closest("tr[data-id]");
@@ -127,18 +127,18 @@
     tgButton.addEventListener("click", function () {
       var out = document.getElementById("telegram-test-result");
       tgButton.disabled = true;
-      out.innerHTML = '<p class="muted">در حال ارسال…</p>';
+      out.innerHTML = '<p class="muted">Sending…</p>';
       post(tgButton.getAttribute("data-url"))
         .then(function (r) {
           if (r.error) { out.innerHTML = '<div class="alert alert-error">' + esc(r.error) + "</div>"; return; }
           out.innerHTML = r.results.map(function (x) {
             return x.ok
-              ? '<div class="alert alert-success">✅ ' + esc(x.chat_id) + ": ارسال شد — " + esc(x.via) + "</div>"
+              ? '<div class="alert alert-success">✅ ' + esc(x.chat_id) + ": sent — " + esc(x.via) + "</div>"
               : '<div class="alert alert-error">❌ ' + esc(x.chat_id) + ": " + esc(x.error) +
                 (x.tried && x.tried.length ? "<br><small>" + esc(x.tried.join(" | ")) + "</small>" : "") + "</div>";
           }).join("");
         })
-        .catch(function () { out.innerHTML = '<div class="alert alert-error">خطا در ارتباط با پنل</div>'; })
+        .catch(function () { out.innerHTML = '<div class="alert alert-error">Could not reach the panel</div>'; })
         .then(function () { tgButton.disabled = false; });
     });
   }

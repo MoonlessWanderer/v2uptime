@@ -43,15 +43,15 @@ def validate_url(url: str) -> str:
     url = (url or "").strip()
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https") or not parts.hostname:
-        raise ValueError("آدرس Subscription باید با http:// یا https:// شروع شود.")
+        raise ValueError("Subscription URL must start with http:// or https://.")
     return url
 
 
 async def fetch_text(url: str, proxy_pool: ProxyPool | None, timeout: float = 20.0) -> tuple[str, str]:
     """Return (content, route label).  Tries direct first, then up to 3 servers."""
-    routes: list[tuple[str | None, str]] = [(None, "مستقیم")]
+    routes: list[tuple[str | None, str]] = [(None, "direct")]
     if proxy_pool is not None:
-        routes += [(c.url, f"سرور «{c.name}»") for c in (await proxy_pool.acandidates())[:3]]
+        routes += [(c.url, f"server {c.name}") for c in (await proxy_pool.acandidates())[:3]]
     errors = []
     for proxy, label in routes:
         try:
@@ -62,11 +62,11 @@ async def fetch_text(url: str, proxy_pool: ProxyPool | None, timeout: float = 20
                 errors.append(f"{label}: HTTP {response.status_code}")
                 continue
             if len(response.content) > MAX_SIZE:
-                raise ValueError("محتوای Subscription بیش از حد بزرگ است.")
+                raise ValueError("Subscription content is too large.")
             return response.text, label
         except (httpx.HTTPError, OSError) as exc:
             errors.append(f"{label}: {type(exc).__name__}")
-    raise ValueError("دریافت Subscription ناموفق بود: " + "؛ ".join(errors))
+    raise ValueError("Could not fetch the subscription: " + "; ".join(errors))
 
 
 def apply_subscription(sub_id: int, content: str) -> SyncResult:

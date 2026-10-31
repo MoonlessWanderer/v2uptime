@@ -110,7 +110,7 @@ def create_app(cfg: Config | None = None, background: bool = True) -> FastAPI:
         wants_json = (request.method != "GET" and "application/json" in request.headers.get("content-type", "")) \
             or "application/json" in request.headers.get("accept", "")
         if wants_json:
-            return JSONResponse({"detail": "نشست شما منقضی شده است؛ دوباره وارد شوید."}, status_code=401)
+            return JSONResponse({"detail": "Your session has expired. Sign in again."}, status_code=401)
         return RedirectResponse(admin_url("/login"), status_code=303)
 
     @app.exception_handler(HTTPException)
@@ -119,7 +119,7 @@ def create_app(cfg: Config | None = None, background: bool = True) -> FastAPI:
         if path.startswith("/api/") or path.startswith("/internal/") or "application/json" in \
                 request.headers.get("accept", "") or "application/json" in request.headers.get("content-type", ""):
             return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
-        message = exc.detail if isinstance(exc.detail, str) and exc.status_code != 404 else "صفحه پیدا نشد."
+        message = exc.detail if isinstance(exc.detail, str) and exc.status_code != 404 else "Page not found."
         return render(request, "error.html", {"code": exc.status_code, "message": message},
                       status_code=exc.status_code)
 

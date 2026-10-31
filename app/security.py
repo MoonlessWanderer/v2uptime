@@ -19,11 +19,11 @@ PASSWORD_MAX_BYTES = 72  # bcrypt limit
 def validate_password(password: str, confirm: str | None = None) -> str | None:
     """Return a Persian error message, or None if acceptable."""
     if len(password) < PASSWORD_MIN_LENGTH:
-        return f"رمز عبور باید حداقل {PASSWORD_MIN_LENGTH} کاراکتر باشد."
+        return f"Password must be at least {PASSWORD_MIN_LENGTH} characters."
     if len(password.encode()) > PASSWORD_MAX_BYTES:
-        return "رمز عبور بیش از حد طولانی است (حداکثر ۷۲ بایت)."
+        return "Password is too long (72 bytes maximum)."
     if confirm is not None and password != confirm:
-        return "رمز عبور و تکرار آن یکسان نیستند."
+        return "Passwords do not match."
     return None
 
 
