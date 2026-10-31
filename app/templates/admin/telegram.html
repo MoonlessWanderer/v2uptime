@@ -1,0 +1,50 @@
+{% extends "admin/base.html" %}
+{% from "admin/_fields.html" import field %}
+{% block page_title %}ربات تلگرام{% endblock %}
+{% block content %}
+<div class="page-head"><h1>ربات تلگرام</h1></div>
+
+<div class="grid-2">
+  <form method="post" action="{{ admin_url('/telegram') }}" class="panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    {% for key, title, defs in groups %}
+    <h2>{{ title }}</h2>
+    <div class="form-grid single">
+      {% for d in defs %}{{ field(d, values[d.key], masked_token if d.key == 'telegram_token' else '', servers) }}{% endfor %}
+    </div>
+    {% endfor %}
+    <p class="help muted">آستانه‌های قطع/وصل همان N/M صفحه تنظیمات هستند. در حالت خودکار ابتدا ارسال مستقیم (۵ ثانیه) امتحان می‌شود و در صورت شکست از طریق سرورهای آنلاین (تا ۴ سرور).</p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">ذخیره</button></div>
+  </form>
+
+  <div>
+    <section class="panel">
+      <h2>ارسال پیام تست</h2>
+      <p class="muted">پیام فوراً (بدون صف) به همه Chat IDها ارسال می‌شود و مسیر ارسال نمایش داده می‌شود. ابتدا تنظیمات را ذخیره کنید.</p>
+      <button type="button" class="btn" id="telegram-test" data-url="{{ admin_url('/telegram/test') }}"><svg class="ic"><use href="#i-send"/></svg>ارسال پیام تست</button>
+      <div id="telegram-test-result" style="margin-top:12px"></div>
+    </section>
+    <section class="panel">
+      <h2>وضعیت صف</h2>
+      <dl class="kv">
+        <dt>در صف</dt><dd>{{ queue.pending|fa }}{% if queue.oldest_pending %} (قدیمی‌ترین: {{ queue.oldest_pending|ago }}){% endif %}</dd>
+        <dt>ارسال ۲۴ ساعت</dt><dd>{{ queue.sent_24h|fa }}</dd>
+        <dt>ناموفق دائمی</dt><dd>{{ queue.failed|fa }}</dd>
+        <dt>آخرین ارسال</dt><dd>{{ queue.last_sent_at|dt if queue.last_sent_at else '—' }}{% if queue.last_via %} · {{ queue.last_via }}{% endif %}</dd>
+        <dt>آخرین خطا</dt><dd>{{ queue.last_error or '—' }}</dd>
+        <dt>مسیر کش‌شده</dt><dd class="ltr">{{ last_route or '—' }}</dd>
+        {% if bot_error %}<dt>خطای دستورها</dt><dd>{{ bot_error }}</dd>{% endif %}
+      </dl>
+    </section>
+    <section class="panel">
+      <h2>دستورهای ربات</h2>
+      <ul class="muted">
+        <li><code>/status</code> وضعیت لحظه‌ای همه سرورها</li>
+        <li><code>/report</code> گزارش ۲۴ ساعت</li>
+        <li><code>/incidents</code> آخرین ۱۰ قطعی</li>
+      </ul>
+      <p class="help muted">فقط به Chat IDهای ثبت‌شده پاسخ داده می‌شود.</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% macro field(d, value, masked="", servers=None) %}
+{% set ltr = d.kind in ("url", "path", "tz", "chat_ids", "secret", "time") %}
+<div class="field{{ ' full' if d.kind in ('text', 'multi') }}">
+  {% if d.kind == "bool" %}
+    <label class="check"><input type="checkbox" name="{{ d.key }}" value="1" {{ 'checked' if value }}> {{ d.label }}</label>
+  {% elif d.key == "telegram_preferred_server" and servers is not none %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <select id="f-{{ d.key }}" name="{{ d.key }}">
+      <option value="0">انتخاب خودکار</option>
+      {% for s in servers %}<option value="{{ s.id }}" {{ 'selected' if value == s.id }}>{{ s.name }}</option>{% endfor %}
+    </select>
+  {% elif d.kind == "choice" %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <select id="f-{{ d.key }}" name="{{ d.key }}">
+      {% for v, l in d.choices %}<option value="{{ v }}" {{ 'selected' if value|string == v }}>{{ l }}</option>{% endfor %}
+    </select>
+  {% elif d.kind == "multi" %}
+    <span class="label">{{ d.label }}</span>
+    <div class="checks">
+      {% set chosen = value.split(",") %}
+      {% for v, l in d.choices %}<label class="check"><input type="checkbox" name="{{ d.key }}" value="{{ v }}" {{ 'checked' if v in chosen }}> {{ l }}</label>{% endfor %}
+    </div>
+  {% elif d.kind == "text" %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <textarea id="f-{{ d.key }}" name="{{ d.key }}" rows="3" maxlength="2000">{{ value }}</textarea>
+  {% elif d.kind == "secret" %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <input type="text" id="f-{{ d.key }}" name="{{ d.key }}" value="{{ masked }}" class="ltr mono" autocomplete="off" spellcheck="false" placeholder="123456789:AA...">
+    <span class="help">به‌صورت ماسک‌شده نمایش داده می‌شود؛ برای تغییر، مقدار جدید را وارد کنید.</span>
+  {% elif d.kind in ("int", "float") %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <input type="number" id="f-{{ d.key }}" name="{{ d.key }}" value="{{ value }}" class="ltr"
+           {% if d.min is not none %}min="{{ d.min|int }}"{% endif %} {% if d.max is not none %}max="{{ d.max|int }}"{% endif %} step="{{ 'any' if d.kind == 'float' else 1 }}">
+  {% elif d.kind == "time" %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <input type="time" id="f-{{ d.key }}" name="{{ d.key }}" value="{{ value }}" class="ltr">
+  {% else %}
+    <label for="f-{{ d.key }}">{{ d.label }}</label>
+    <input type="text" id="f-{{ d.key }}" name="{{ d.key }}" value="{{ value }}" class="{{ 'ltr' if ltr }}" spellcheck="false">
+  {% endif %}
+  {% if d.help %}<span class="help">{{ d.help }}</span>{% endif %}
+</div>
+{% endmacro %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{% block page_title %}پنل مدیریت{% endblock %} · {{ settings.get('site_title') }}{% endblock %}
+{% block head %}<meta name="csrf-token" content="{{ csrf }}"><meta name="admin-base" content="{{ admin_url('') }}"><meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block body_class %}admin{% endblock %}
+{% macro nav_link(key, path, icon, label) -%}
+<a href="{{ admin_url(path) }}" class="{{ 'is-active' if nav == key }}"><svg class="ic" aria-hidden="true"><use href="#i-{{ icon }}"/></svg>{{ label }}</a>
+{%- endmacro %}
+{% block body %}
+<div class="admin-shell">
+  <header class="topbar">
+    <div class="topbar-actions">
+      <button class="icon-btn nav-toggle" type="button" aria-label="منو" data-nav-toggle><svg class="ic" aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <a class="brand" href="{{ admin_url('/') }}"><img src="{{ static_url('img/favicon.svg') }}" alt="" width="26" height="26">{{ settings.get('site_title') }}</a>
+    </div>
+    <div class="topbar-actions">
+      <a class="btn btn-sm" href="/" target="_blank" rel="noopener">صفحه عمومی</a>
+      <button class="icon-btn theme-toggle" type="button" aria-label="تغییر حالت روشن/تاریک" data-theme-toggle>
+        <svg class="ic ic-sun" aria-hidden="true"><use href="#i-sun"/></svg><svg class="ic ic-moon" aria-hidden="true"><use href="#i-moon"/></svg>
+      </button>
+      <form method="post" action="{{ admin_url('/logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf }}">
+        <button class="icon-btn" type="submit" aria-label="خروج" title="خروج ({{ admin.username }})"><svg class="ic" aria-hidden="true"><use href="#i-logout"/></svg></button>
+      </form>
+    </div>
+  </header>
+  <div class="admin-body">
+    <nav class="sidenav" id="sidenav" aria-label="منوی مدیریت">
+      {{ nav_link('dashboard', '/', 'home', 'داشبورد') }}
+      {{ nav_link('servers', '/servers', 'server', 'سرورها') }}
+      {{ nav_link('subscriptions', '/subscriptions', 'link', 'Subscription') }}
+      {{ nav_link('incidents', '/incidents', 'alert', 'قطعی‌ها') }}
+      {{ nav_link('telegram', '/telegram', 'send', 'ربات تلگرام') }}
+      {{ nav_link('settings', '/settings', 'settings', 'تنظیمات') }}
+      {{ nav_link('backup', '/backup', 'archive', 'پشتیبان') }}
+      {{ nav_link('password', '/password', 'key', 'تغییر رمز') }}
+    </nav>
+    <main class="admin-main">
+      {% for kind, message in flashes %}
+      <div class="alert alert-{{ kind }}" role="status">{{ message }}</div>
+      {% endfor %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ static_url('js/chart.js') }}" defer></script>
+<script src="{{ static_url('js/admin.js') }}" defer></script>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "admin/base.html" %}
+{% block page_title %}پشتیبان{% endblock %}
+{% block content %}
+<div class="page-head"><h1>پشتیبان‌گیری و بازیابی</h1></div>
+<div class="grid-2">
+  <section class="panel">
+    <h2>خروجی (Export)</h2>
+    <p class="muted">فایل JSON شامل سرورها (با لینک کانفیگ)، Subscriptionها و تنظیمات (از جمله Bot Token). این فایل را امن نگه دارید.</p>
+    <a class="btn btn-primary" href="{{ admin_url('/backup/export') }}"><svg class="ic"><use href="#i-archive"/></svg>دریافت فایل پشتیبان</a>
+    <p class="help muted" style="margin-top:12px">برای پشتیبان کامل دیتابیس (شامل تاریخچه) از منوی <code>v2uptime</code> گزینه «بکاپ و ریستور» را استفاده کنید.</p>
+  </section>
+  <form class="panel" method="post" action="{{ admin_url('/backup/import') }}" enctype="multipart/form-data" data-confirm="بازیابی انجام شود؟">
+    <h2>بازیابی (Import)</h2>
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="field"><label for="file">فایل JSON</label><input type="file" id="file" name="file" accept="application/json,.json" required></div>
+    <div class="field checks" style="margin-top:12px">
+      <label class="check"><input type="radio" name="mode" value="merge" checked> ادغام (سرورهای تکراری رد می‌شوند)</label>
+      <label class="check"><input type="radio" name="mode" value="replace"> جایگزینی کامل (همه سرورها و تاریخچه فعلی حذف می‌شوند)</label>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">بازیابی</button></div>
+  </form>
+</div>
+{% endblock %}

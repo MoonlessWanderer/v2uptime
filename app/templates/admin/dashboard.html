@@ -1,0 +1,91 @@
+{% extends "admin/base.html" %}
+{% block page_title %}داشبورد{% endblock %}
+{% block content %}
+<div class="page-head"><h1>داشبورد</h1><a class="btn" href="{{ admin_url('/servers') }}"><svg class="ic"><use href="#i-plus"/></svg>افزودن سرور</a></div>
+
+{% if network_down %}
+<div class="alert alert-error">🚨 اینترنت خود سرور مانیتور از {{ network_down|dt }} قطع است؛ نتایج این بازه در آمار حساب نمی‌شوند.</div>
+{% endif %}
+{% if not xray.installed %}
+<div class="alert alert-error">فایل Xray پیدا نشد (<code>{{ xray.binary }}</code>). از منوی <code>v2uptime</code> گزینه «آپدیت هسته Xray» را اجرا کنید.</div>
+{% elif not xray.ready %}
+<div class="alert alert-warn">Xray در حال اجرا نیست ({{ xray.state }}). {{ xray.last_error or '' }}</div>
+{% endif %}
+
+<div class="kpis">
+  <div class="stat stat-online"><svg class="ic"><use href="#i-check"/></svg><div><span class="stat-value">{{ counts.online|fa }}</span><span class="stat-label">آنلاین</span></div></div>
+  <div class="stat stat-degraded"><svg class="ic"><use href="#i-alert"/></svg><div><span class="stat-value">{{ counts.degraded|fa }}</span><span class="stat-label">ناپایدار</span></div></div>
+  <div class="stat stat-offline"><svg class="ic"><use href="#i-x"/></svg><div><span class="stat-value">{{ counts.offline|fa }}</span><span class="stat-label">قطع</span></div></div>
+  <div class="stat stat-uptime"><svg class="ic"><use href="#i-server"/></svg><div><span class="stat-value">{{ total|fa }}</span><span class="stat-label">سرور فعال ({{ counts.unknown|fa }} نامشخص)</span></div></div>
+</div>
+
+<div class="grid-2">
+  <section class="panel">
+    <div class="panel-head"><h2>سرورهای دارای مشکل</h2></div>
+    {% if problem %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>سرور</th><th>وضعیت</th><th>از</th><th>آخرین خطا</th></tr></thead>
+      <tbody>
+      {% for p in problem %}
+        <tr>
+          <td><a href="{{ admin_url('/servers/' ~ p.id) }}">{{ p.name }}</a></td>
+          <td><span class="status-dot {{ p.status }}"></span>{{ p.status|status_label }}</td>
+          <td>{{ p.since|dt if p.since else '—' }}</td>
+          <td>{{ p.error|error_label if p.error else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="muted">همه سرورها سالم هستند.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Xray و چرخه تست</h2></div>
+    <dl class="kv">
+      <dt>وضعیت Xray</dt><dd>{% if xray.ready %}<span class="pill pill-ok">در حال اجرا</span>{% else %}<span class="pill pill-bad">{{ xray.state }}</span>{% endif %}</dd>
+      <dt>نسخه</dt><dd class="ltr">{{ xray.version or '—' }}</dd>
+      <dt>PID / epoch</dt><dd class="ltr">{{ xray.pid or '—' }} / {{ xray.epoch }}</dd>
+      <dt>شروع</dt><dd>{{ xray.started_at|dt if xray.started_at else '—' }}</dd>
+      <dt>ری‌استارت / کرش</dt><dd>{{ xray.restarts|fa }} / {{ xray.crashes|fa }}</dd>
+      <dt>سرورهای بارگذاری‌شده</dt><dd>{{ xray.loaded|fa }}</dd>
+      {% if report %}
+      {% set skip_labels = {"xray_missing": "Xray نصب نیست", "xray_not_ready": "Xray آماده نبود", "no_servers": "سروری برای تست وجود ندارد"} %}
+      <dt>آخرین چرخه</dt><dd>{{ report.started_at|dt }} ·
+        {% if report.skipped_reason %}<span class="pill">انجام نشد: {{ skip_labels.get(report.skipped_reason, report.skipped_reason) }}</span>
+        {% else %}{{ '%.1f'|format(report.duration)|fa }} ثانیه ·
+        {{ report.ok|fa }} موفق / {{ report.fail|fa }} ناموفق / {{ report.unknown|fa }} نامشخص
+        {% if report.discarded %}<span class="pill pill-warn">دور ریخته شد (ری‌استارت Xray)</span>{% endif %}{% endif %}</dd>
+      <dt>چک مرجع داخلی</dt><dd>{% if report.reference_ok is none %}—{% elif report.reference_ok %}<span class="pill pill-ok">موفق</span>{% else %}<span class="pill pill-bad">ناموفق</span>{% endif %}</dd>
+      {% endif %}
+    </dl>
+    {% if xray_log %}<details style="margin-top:12px"><summary>آخرین خروجی Xray</summary><pre class="log-box">{{ xray_log|join('\n') }}</pre></details>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>صف تلگرام</h2><a class="btn btn-sm" href="{{ admin_url('/telegram') }}">تنظیمات</a></div>
+    <dl class="kv">
+      <dt>ربات</dt><dd>{% if telegram_enabled %}<span class="pill pill-ok">فعال</span>{% else %}<span class="pill">غیرفعال</span>{% endif %}</dd>
+      <dt>در صف</dt><dd>{{ queue.pending|fa }}{% if queue.oldest_pending %} (قدیمی‌ترین: {{ queue.oldest_pending|ago }}){% endif %}</dd>
+      <dt>ارسال ۲۴ ساعت</dt><dd>{{ queue.sent_24h|fa }}</dd>
+      <dt>ناموفق دائمی</dt><dd>{{ queue.failed|fa }}</dd>
+      <dt>آخرین ارسال</dt><dd>{{ queue.last_sent_at|dt if queue.last_sent_at else '—' }} {% if queue.last_via %}· {{ queue.last_via }}{% endif %}</dd>
+      <dt>آخرین خطا</dt><dd>{{ queue.last_error or '—' }}</dd>
+      {% if bot_error %}<dt>خطای دریافت دستورها</dt><dd>{{ bot_error }}</dd>{% endif %}
+    </dl>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>آخرین قطعی‌ها</h2><a class="btn btn-sm" href="{{ admin_url('/incidents') }}">همه</a></div>
+    {% if recent %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>سرور</th><th>شروع</th><th>مدت</th><th>علت</th></tr></thead>
+      <tbody>{% for i in recent %}
+        <tr><td>{{ i.server.name }}</td><td>{{ i.started_at|dt }}</td>
+          <td>{% if i.ended_at %}{{ i.duration_seconds|duration }}{% else %}<span class="pill pill-bad">ادامه دارد</span>{% endif %}</td>
+          <td>{{ i.error_type|error_label }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted">قطعی‌ای ثبت نشده است.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,22 @@
+{% extends "admin/base.html" %}
+{% from "admin/_fields.html" import field %}
+{% block page_title %}تنظیمات{% endblock %}
+{% block content %}
+<div class="page-head"><h1>تنظیمات</h1></div>
+<form method="post" action="{{ admin_url('/settings') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf }}">
+  {% for key, title, defs in groups %}
+  <section class="panel">
+    <h2>{{ title }}</h2>
+    <div class="form-grid">
+      {% for d in defs %}{{ field(d, values[d.key]) }}{% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <div class="alert alert-info">
+    وضعیت <b>قطع</b>: N تست ناموفق پشت‌سرهم (Incident باز می‌شود)؛ با M تست موفق پشت‌سرهم بسته می‌شود.
+    <b>ناپایدار</b>: آخرین تست موفق ولی کند، یا درصد شکست ۱۰ دقیقه اخیر بیش از آستانه. همین قانون مبنای اعلان‌های تلگرام است.
+  </div>
+  <div class="form-actions"><button class="btn btn-primary" type="submit">ذخیره تنظیمات</button></div>
+</form>
+{% endblock %}

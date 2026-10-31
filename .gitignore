@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+/config.py
+/data/
+/logs/
+/bin/
+/.staging/
+/.rollback/
+*.db
+*.db-wal
+*.db-shm
+.claude/
+app/static/fonts/*.woff2

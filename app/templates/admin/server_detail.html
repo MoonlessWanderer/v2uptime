@@ -1,0 +1,80 @@
+{% extends "admin/base.html" %}
+{% block page_title %}{{ server.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ flag_emoji(server.country) }} {{ server.name }}</h1>
+  <div class="form-actions" style="margin:0">
+    <button type="button" class="btn" data-test="{{ server.id }}"><svg class="ic"><use href="#i-play"/></svg>تست همین الان</button>
+    <span class="test-result" data-result-for="{{ server.id }}"></span>
+    <a class="btn" href="{{ admin_url('/servers/' ~ server.id ~ '/edit') }}"><svg class="ic"><use href="#i-edit"/></svg>ویرایش</a>
+  </div>
+</div>
+
+<div class="grid-2">
+  <section class="panel">
+    <h2>مشخصات</h2>
+    <dl class="kv">
+      <dt>وضعیت</dt><dd><span class="status-dot {{ status }}"></span>{{ status|status_label }}{% if not server.is_active %} (غیرفعال){% endif %}</dd>
+      <dt>پروتکل</dt><dd class="ltr">{{ server.protocol }} / {{ server.transport }} / {{ server.security }}</dd>
+      <dt>آدرس</dt><dd class="ltr">{{ server.address }}:{{ server.port }}</dd>
+      <dt>SOCKS محلی</dt><dd class="ltr">{% if port %}socks5h://127.0.0.1:{{ port }}{% else %}بارگذاری نشده{% endif %}</dd>
+      <dt>عمومی</dt><dd>{{ 'بله' if server.is_public else 'خیر (مخفی)' }}</dd>
+      {% if metrics %}
+      <dt>پینگ فعلی / میانه ۱ ساعت</dt><dd>{{ metrics.latency_ms|ms }} / {{ metrics.median_1h|ms }} ms</dd>
+      <dt>آپتایم ۲۴h / ۷d / ۳۰d</dt><dd>{{ metrics.uptime_24h|percent }} / {{ metrics.uptime_7d|percent }} / {{ metrics.uptime_30d|percent }}</dd>
+      <dt>Jitter / امتیاز پایداری</dt><dd>{{ metrics.jitter_24h|ms }} ms / {{ metrics.stability|fa if metrics.stability is not none else '—' }}</dd>
+      {% endif %}
+      {% if server.xray_error %}<dt>خطای Xray</dt><dd><code>{{ server.xray_error }}</code></dd>{% endif %}
+    </dl>
+  </section>
+  <section class="panel">
+    <h2>آمار قطعی</h2>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>بازه</th><th class="num">تعداد</th><th class="num">مجموع</th><th class="num">MTTR</th><th class="num">طولانی‌ترین</th></tr></thead>
+      <tbody>{% for key in ranges %}{% set st = stats[key] %}
+        <tr><td>{{ key }}</td><td class="num">{{ (st.count if st else 0)|fa }}</td>
+          <td class="num">{{ st.downtime|duration if st else '—' }}</td>
+          <td class="num">{{ st.mttr|duration if st and st.mttr is not none else '—' }}</td>
+          <td class="num">{{ st.longest|duration if st else '—' }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+
+<section class="panel" data-history="{{ admin_url('/servers/' ~ server.id ~ '/history.json') }}">
+  <div class="panel-head"><h2>نمودار</h2>
+    <div class="segmented" role="group" aria-label="بازه">
+      <button type="button" class="seg is-active" data-range="24h">۲۴ ساعت</button>
+      <button type="button" class="seg" data-range="7d">۷ روز</button>
+      <button type="button" class="seg" data-range="30d">۳۰ روز</button>
+    </div>
+  </div>
+  <h4 class="muted">پینگ (ms)</h4><div class="chart"><canvas data-chart="latency"></canvas></div>
+  <h4 class="muted" style="margin-top:12px">آپتایم (٪)</h4><div class="chart"><canvas data-chart="uptime"></canvas></div>
+</section>
+
+<div class="grid-2">
+  <section class="panel">
+    <h2>آخرین چک‌ها</h2>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>زمان</th><th>نتیجه</th><th class="num">پینگ</th><th>خطا</th></tr></thead>
+      <tbody>{% for c in checks %}
+        <tr><td>{{ c.checked_at|dt(true) }}</td>
+          <td>{% if c.status == 'ok' %}<span class="pill pill-ok">موفق</span>{% elif c.status == 'fail' %}<span class="pill pill-bad">ناموفق</span>{% else %}<span class="pill">نامشخص</span>{% endif %}</td>
+          <td class="num">{{ c.latency_ms|ms }}</td>
+          <td>{% if c.error_type %}{{ c.error_type|error_label }}{% if c.error_detail %}<br><small class="muted ltr">{{ c.error_detail[:160] }}</small>{% endif %}{% endif %}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">هنوز چکی ثبت نشده است.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <h2>قطعی‌ها</h2>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>شروع</th><th>پایان</th><th class="num">مدت</th><th>علت</th></tr></thead>
+      <tbody>{% for i in incidents %}
+        <tr><td>{{ i.started_at|dt }}</td><td>{{ i.ended_at|dt if i.ended_at else 'ادامه دارد' }}</td>
+          <td class="num">{{ ((i.ended_at or now) - i.started_at)|duration }}</td><td>{{ i.error_type|error_label }}</td></tr>
+      {% else %}<tr><td colspan="4" class="muted">قطعی‌ای ثبت نشده است.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

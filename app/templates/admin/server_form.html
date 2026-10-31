@@ -1,0 +1,24 @@
+{% extends "admin/base.html" %}
+{% block page_title %}ویرایش {{ server.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>ویرایش سرور</h1><a class="btn" href="{{ admin_url('/servers') }}">بازگشت</a></div>
+<section class="panel">
+  <form method="post" action="{{ admin_url('/servers/' ~ server.id ~ '/edit') }}" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <div class="field"><label for="name">نام</label><input type="text" id="name" name="name" value="{{ server.name }}" required maxlength="200"></div>
+    <div class="field"><label for="country">کد کشور (برای پرچم)</label><input type="text" id="country" name="country" value="{{ server.country }}" maxlength="2" class="ltr" placeholder="DE"></div>
+    <div class="field full"><label for="tags">برچسب‌ها</label><input type="text" id="tags" name="tags" value="{{ server.tags }}"></div>
+    <div class="field full">
+      <label for="raw_link">لینک کانفیگ</label>
+      <textarea id="raw_link" name="raw_link" class="mono" rows="4">{{ server.raw_link }}</textarea>
+      <span class="help">با تغییر لینک، کانفیگ در Xray به‌صورت hot جایگزین می‌شود و بقیه سرورها قطع نمی‌شوند.</span>
+    </div>
+    <div class="field full checks">
+      <label class="check"><input type="checkbox" name="is_active" value="1" {{ 'checked' if server.is_active }}> فعال (تست شود)</label>
+      <label class="check"><input type="checkbox" name="is_public" value="1" {{ 'checked' if server.is_public }}> نمایش در صفحه عمومی</label>
+    </div>
+    {% if server.xray_error %}<div class="alert alert-error full">Xray این کانفیگ را رد کرده است: <code>{{ server.xray_error }}</code></div>{% endif %}
+    <div class="form-actions full"><button class="btn btn-primary" type="submit">ذخیره</button></div>
+  </form>
+</section>
+{% endblock %}

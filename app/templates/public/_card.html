@@ -1,0 +1,51 @@
+{% set STATUS_ICON = {"online": "check", "degraded": "alert", "offline": "x", "unknown": "help"} %}
+
+{% macro status_badge(status, label) -%}
+<span class="badge b-{{ status }}"><svg class="ic" aria-hidden="true"><use href="#i-{{ STATUS_ICON[status] }}"/></svg>{{ label }}</span>
+{%- endmacro %}
+
+{% macro card(s, order, data) %}
+{% set rank_fast = data.order.fastest.index(s.id) + 1 if s.id in data.order.fastest else "" %}
+{% set rank_stable = data.order.stable.index(s.id) + 1 if s.id in data.order.stable else "" %}
+<article class="card st-{{ s.status }}" data-id="{{ s.id }}" data-order="{{ order }}"
+         data-rank-fastest="{{ rank_fast }}" data-rank-stable="{{ rank_stable }}" data-status="{{ s.status }}"
+         data-search="{{ (s.name ~ ' ' ~ s.protocol ~ ' ' ~ s.transport ~ ' ' ~ s.country ~ ' ' ~ s.tags|join(' '))|lower }}"
+         tabindex="0" role="button" aria-label="نمایش جزئیات {{ s.name }}، وضعیت {{ s.status_label }}">
+  <header class="card-head">
+    <div class="card-title">
+      {% if s.flag %}<span class="flag" aria-hidden="true">{{ s.flag }}</span>{% endif %}
+      <h3>{{ s.name }}</h3>
+    </div>
+    {{ status_badge(s.status, s.status_label) }}
+  </header>
+  <div class="card-meta">
+    <span class="chip">{{ s.protocol|upper }}</span><span class="chip">{{ s.transport }}</span>
+    {% for t in s.tags %}<span class="chip chip-tag">{{ t }}</span>{% endfor %}
+    <span class="rank-chip rank-fastest" hidden>#{{ rank_fast|fa }}</span>
+    <span class="rank-chip rank-stable" hidden>{% if s.stability is not none %}امتیاز {{ s.stability|fa }}{% endif %}</span>
+  </div>
+  <dl class="metrics">
+    <div><dt>پینگ</dt><dd>{{ s.latency_ms|ms }}<small>ms</small></dd></div>
+    <div class="{{ 'is-active' if data.range == '24h' }}"><dt>۲۴ ساعت</dt><dd>{{ s.uptime_24h|percent }}</dd></div>
+    <div class="{{ 'is-active' if data.range == '7d' }}"><dt>۷ روز</dt><dd>{{ s.uptime_7d|percent }}</dd></div>
+    <div class="{{ 'is-active' if data.range == '30d' }}"><dt>۳۰ روز</dt><dd>{{ s.uptime_30d|percent }}</dd></div>
+  </dl>
+  <div class="bars" role="img" aria-label="نوار وضعیت {{ data.range_label }} اخیر، آپتایم {{ (s['uptime_' ~ data.range])|percent }}">
+    {%- for b in s.bars -%}
+    <i class="b lv-{{ b.level }}" data-i="{{ loop.index0 }}" data-u="{{ b.uptime if b.uptime is not none else '' }}" data-n="{{ b.incidents }}" data-c="{{ b.checks }}"></i>
+    {%- endfor -%}
+  </div>
+  <div class="bars-axis" aria-hidden="true"><span>{{ data.range_label }} پیش</span><span>اکنون</span></div>
+  {% set sp = sparkline(s.spark) %}
+  <div class="spark-row">
+    <svg class="spark" viewBox="0 0 {{ sp.width }} {{ sp.height }}" preserveAspectRatio="none" aria-hidden="true">
+      {% for x in sp.fails %}<line class="spark-fail" x1="{{ x }}" x2="{{ x }}" y1="0" y2="{{ sp.height }}"/>{% endfor %}
+      {% for seg in sp.segments %}<polyline points="{{ seg }}"/>{% endfor %}
+    </svg>
+    <span class="spark-label">پینگ ۱ ساعت اخیر{% if s.median_1h is not none %} · میانه {{ s.median_1h|ms }}ms{% endif %}</span>
+  </div>
+  {% if s.collecting %}
+  <p class="collecting"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>در حال جمع‌آوری داده</p>
+  {% endif %}
+</article>
+{% endmacro %}

@@ -1,0 +1,44 @@
+{% extends "admin/base.html" %}
+{% block page_title %}قطعی‌ها{% endblock %}
+{% block content %}
+<div class="page-head"><h1>قطعی‌ها (Incidents)</h1></div>
+
+<section class="panel">
+  <form method="get" action="{{ admin_url('/incidents') }}" class="filter-bar">
+    <div class="field"><label for="f-server">سرور</label>
+      <select id="f-server" name="server"><option value="">همه</option>
+        {% for s in servers %}<option value="{{ s.id }}" {{ 'selected' if selected_server == s.id }}>{{ s.name }}</option>{% endfor %}
+      </select></div>
+    <div class="field"><label for="f-range">بازه</label>
+      <select id="f-range" name="range">{% for key in ranges %}<option value="{{ key }}" {{ 'selected' if range_key == key }}>{{ key }}</option>{% endfor %}</select></div>
+    <button class="btn" type="submit">اعمال</button>
+  </form>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>سرور</th><th>شروع</th><th>پایان</th><th class="num">مدت</th><th>علت</th></tr></thead>
+    <tbody>{% for i in incidents %}
+      <tr><td><a href="{{ admin_url('/servers/' ~ i.server.id) }}">{{ i.server.name }}</a></td>
+        <td>{{ i.started_at|dt }}</td>
+        <td>{% if i.ended_at %}{{ i.ended_at|dt }}{% else %}<span class="pill pill-bad">ادامه دارد</span>{% endif %}</td>
+        <td class="num">{{ ((i.ended_at or now) - i.started_at)|duration }}</td>
+        <td>{{ i.error_type|error_label }}</td></tr>
+    {% else %}<tr><td colspan="5" class="muted">در این بازه قطعی‌ای ثبت نشده است.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<section class="panel">
+  <h2>آمار هر سرور</h2>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>سرور</th>
+      {% for key in ranges %}<th class="num">تعداد {{ key }}</th><th class="num">Downtime {{ key }}</th><th class="num">MTTR {{ key }}</th><th class="num">طولانی‌ترین {{ key }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for s in servers %}
+      <tr><td>{{ s.name }}</td>
+      {% for key in ranges %}{% set st = per_range[key].get(s.id) %}
+        <td class="num">{{ (st.count if st else 0)|fa }}</td>
+        <td class="num">{{ st.downtime|duration if st else '—' }}</td>
+        <td class="num">{{ st.mttr|duration if st and st.mttr is not none else '—' }}</td>
+        <td class="num">{{ st.longest|duration if st else '—' }}</td>
+      {% endfor %}</tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

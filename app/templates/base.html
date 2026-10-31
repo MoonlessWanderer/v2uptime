@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ settings.get('site_title') }}{% endblock %}</title>
+  <meta name="description" content="{{ settings.get('site_description') }}">
+  <link rel="icon" href="{{ static_url('img/favicon.svg') }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ static_url('css/app.css') }}">
+  <script src="{{ static_url('js/theme.js') }}"></script>
+  {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% include "_icons.html" %}
+{% block body %}{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>
