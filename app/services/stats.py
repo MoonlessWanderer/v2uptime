@@ -66,7 +66,7 @@ RANGE_LABELS = {"1h": "1h", "24h": "24h", "7d": "7d", "30d": "30d"}
 BAR_SPEC: dict[str, tuple[int, int]] = {
     "1h": (12, 300), "24h": (48, 1800), "7d": (42, 4 * HOUR), "30d": (30, DAY),
 }
-HISTORY_STEP: dict[str, int] = {"1h": 60, "24h": 300, "7d": HOUR, "30d": 6 * HOUR}
+HISTORY_STEP: dict[str, int] = {"1h": 300, "24h": 300, "7d": HOUR, "30d": 6 * HOUR}
 _RAW_RANGES = ("1h", "24h")
 MIN_CHECKS_FOR_RANKING = 10
 PING_WINDOW = 600  # public ping: median of the successful checks in the last 10 minutes
@@ -209,6 +209,18 @@ def day_buckets(now: int, count: int, tz: str) -> list[Bucket]:
 def make_buckets(range_key: str, now: int, tz: str) -> list[Bucket]:
     count, size = BAR_SPEC[range_key]
     return day_buckets(now, count, tz) if size == DAY else fixed_buckets(now, size, count, tz)
+
+
+def tile_buckets(window: list[Bucket], step: int) -> list[Bucket]:
+    """Point slots that cover the status-bar window exactly, so the line spans the bar."""
+    start, end = window[0].start, window[-1].end
+    count = (end - start) // step
+    if count < 1:
+        return list(window)
+    buckets = [Bucket(start + i * step, start + (i + 1) * step) for i in range(count)]
+    if buckets[-1].end != end:
+        buckets[-1] = Bucket(buckets[-1].start, end)
+    return buckets
 
 
 @dataclass
@@ -566,7 +578,8 @@ class StatsService:
         tz = settings.tz
         server = Server.get_by_id(server_id)
         step = HISTORY_STEP[range_key]
-        buckets = fixed_buckets(now, step, HISTORY_RANGES[range_key] // step, tz)
+        bar_buckets = make_buckets(range_key, now, tz)
+        buckets = tile_buckets(bar_buckets, step)
         if range_key in _RAW_RANGES:
             cursor = db.execute_sql(
                 f"SELECT server_id, (checked_at / ?) * ? AS slot, {_COUNT_COLUMNS} FROM checks "
@@ -583,8 +596,9 @@ class StatsService:
                 "WHERE server_id = ? AND checked_at >= ? AND latency_ms IS NOT NULL",
                 [server_id, buckets[0].start]).fetchall()
             medians = _bucket_medians(buckets, samples)
-        bar_buckets = make_buckets(range_key, now, tz)
         bar_counts_ = bar_counts(range_key, bar_buckets, server_id).get(server_id) or [Counts() for _ in bar_buckets]
+        if len(buckets) == len(bar_buckets) and all(a.start == b.start for a, b in zip(buckets, bar_buckets)):
+            series = bar_counts_  # one slot: the point's uptime is the cell's uptime
         bar_starts = [i.started_at for i in incidents_overlapping(bar_buckets[0].start, now, server_id)]
         bars = [{"start": iso_utc(b.start), "end": iso_utc(b.end), **item}
                 for b, item in zip(bar_buckets, bar_items(bar_buckets, bar_counts_, bar_starts))]

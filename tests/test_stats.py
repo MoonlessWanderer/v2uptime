@@ -181,6 +181,23 @@ def test_24h_point_is_the_median_ping_of_its_slot(database):
     assert point["latency"] == 100  # mean of 100, 100, 900 would be 367; the failed check has no ping
 
 
+def test_1h_point_is_the_same_slot_as_its_bar_cell(database):
+    from app.models import Check
+    from app.timeutil import iso_utc
+
+    now = now_ts()
+    slot = (now // 300) * 300 - 300
+    server = make_server("Hour", port=20222)
+    for offset, latency in ((0, 80), (60, 80), (120, 400)):
+        Check.create(server=server, checked_at=slot + offset, status="ok", latency_ms=latency)
+    history = StatsService(LiveRegistry(), lambda sid: False).server_history(server.id, "1h")
+    assert [item["t"] for item in history["points"]] == [cell["start"] for cell in history["bars"]]
+    point = next(item for item in history["points"] if item["t"] == iso_utc(slot))
+    cell = next(item for item in history["bars"] if item["start"] == iso_utc(slot))
+    assert point["latency"] == 80  # mean of 80, 80, 400 would be 187
+    assert point["uptime"] == cell["uptime"]
+
+
 def test_history_payload(database):
     now = now_ts()
     server = make_server()
@@ -188,7 +205,7 @@ def test_history_payload(database):
     Incident.create(server=server, started_at=now - 2000, ended_at=now - 1000, duration_seconds=1000)
     live = LiveRegistry()
     stats = StatsService(live, lambda sid: False)
-    for key, points, bars in (("1h", 60, 12), ("24h", 288, 48), ("7d", 168, 42), ("30d", 120, 30)):
+    for key, points, bars in (("1h", 12, 12), ("24h", 288, 48), ("7d", 168, 42), ("30d", 120, 30)):
         history = stats.server_history(server.id, key)
         assert len(history["points"]) == points
         assert len(history["bars"]) == bars
