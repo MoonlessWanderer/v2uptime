@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/MoonlessWanderer/v2uptime/main/inst
 Offline install: on a machine that has internet, download `v2uptime-<version>-linux-amd64.tar.gz` (or `arm64`) from Releases, copy it to the server, and run:
 
 ```bash
-sudo bash install.sh --from-archive ./v2uptime-v1.4.4-linux-amd64.tar.gz
+sudo bash install.sh --from-archive ./v2uptime-v1.4.5-linux-amd64.tar.gz
 ```
 
 GitHub Actions (`.github/workflows/release.yml`) builds those archives for each release, with wheels for CPython 3.10–3.13. Apt packages (nginx, certbot, python3-venv) are not inside the archive. In an offline install they still come from an apt mirror (`--apt-mirror`).
@@ -80,7 +80,7 @@ When GitHub is not reachable directly, the download (and pip) can go through a h
 Update from an offline archive:
 
 ```bash
-sudo v2uptime --from-archive ./v2uptime-v1.4.4-linux-amd64.tar.gz
+sudo v2uptime --from-archive ./v2uptime-v1.4.5-linux-amd64.tar.gz
 ```
 
 Then choose **2) Update**.
@@ -131,7 +131,7 @@ Open **Telegram** in the admin panel.
 
 `auto` tries a direct send with a 5 second connect timeout, then up to 4 online servers over local SOCKS (`socks5h`, so DNS goes through the tunnel). Order: preferred server, then highest stability score, then lowest latency. The last route that worked is tried first next time. The server an outage alert is about is not used to send that alert.
 
-Every alert is stored in `TelegramOutbox` first. Checks never wait on Telegram. If no route works, the row is retried with backoff from 30 seconds up to 10 minutes, and the message still shows the real event time. More than 10 waiting messages for a chat are merged into a summary. Each message stays within 4096 characters. A 429 response honors `retry_after`. Rows that are not still pending are deleted after 7 days.
+Every alert is stored in `TelegramOutbox` first. Checks never wait on Telegram. If no route works, the row is retried with backoff from 30 seconds up to 10 minutes, and the message still shows the real event time. When a newer message is due, older waiting rows for that chat go first. More than 10 waiting messages for a chat are merged into a summary. Each message stays within 4096 characters. A 429 response honors `retry_after`. Rows that are not still pending are deleted after 7 days.
 
 A down alert looks like this:
 
@@ -151,7 +151,7 @@ Downtime: 12m (18:28 → 18:40)
 
 When the outage crosses midnight, both ends include the date: `Downtime: 1d 2h (2026-10-30 18:28 → 2026-10-31 20:40)`. The monitor network restore message uses the same format.
 
-If the message left the queue at least 2 minutes late, a line is added: `Delivered 14m late.`
+If the message left the queue at least 2 minutes late, a line is added: `Delivered 14m late.` A summary uses its oldest message: `Oldest message delivered 14m late.`
 
 The daily and weekly reports are one line per server (uptime, ping, incident count, downtime), then Fastest and Most stable. The first run does not send a report immediately; the next scheduled time does.
 
@@ -220,7 +220,7 @@ Status, used by the public page, incidents, and Telegram:
 - Most stable ranks servers by the 24h stability score. A server labeled New is included once two successful checks give a jitter. One check is not ranked.
 - Stability score (0–100): `normalized_jitter = min(jitter_24h / 500ms, 1)`, then `(uptime_24h / 100 * 0.7 + (1 - normalized_jitter) * 0.3) * 100`. Jitter is the standard deviation of latency.
 - A server with fewer than 10 valid checks in 24 hours is labeled **New** on the public page.
-- Monitor network outage: if every server fails in the same cycle and the reference URL (default `https://www.aparat.com`, no proxy) also fails, that cycle is stored as `unknown` and a single outage alert is sent (and a restore alert later).
+- Monitor network outage: if every server fails in the same cycle and the reference URL (default `https://www.aparat.com`, no proxy) also fails, that cycle is stored as `unknown` and a single outage alert is sent (and a restore alert later, even if the panel restarted during the outage).
 - Flapping: more than 4 transitions in 30 minutes sends one warning and pauses per-server down/up messages until the server stays unchanged for half the window. A final message then reports the current status.
 - A manual **Test now** is shown in the panel and is not stored in the stats.
 - Storage: SQLite in WAL mode with `busy_timeout`. Each cycle is written in one transaction. Raw rows are kept for the retention window; hourly rows cover 7d and 30d, plus raw rows not yet rolled up. Hourly aggregation is idempotent and catches up after downtime.

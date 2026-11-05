@@ -152,6 +152,7 @@ DEFINITIONS: tuple[SettingDef, ...] = (
     SettingDef("last_daily_report", "", "str", "", "internal", internal=True),
     SettingDef("last_weekly_report", "", "str", "", "internal", internal=True),
     SettingDef("security_event_added", False, "bool", "", "internal", internal=True),
+    SettingDef("network_down_since", 0, "int", "", "internal", internal=True),
 )
 
 BY_KEY: dict[str, SettingDef] = {d.key: d for d in DEFINITIONS}

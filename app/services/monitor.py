@@ -15,6 +15,7 @@ from app.models import Check, Server
 from app.services import events as ev
 from app.services.checker import CheckRecord, CycleReport
 from app.services.incidents import IncidentService
+from app.services.settings import settings
 from app.services.stats import StatsService
 from app.services.status import LiveRegistry, LivePoint
 
@@ -41,11 +42,18 @@ class Monitor:
         self.notify = notify
         self.network_down_since: int | None = None
 
+    def restore(self) -> None:
+        """Pick up an outage that was open when the panel stopped (sync, DB)."""
+        self.network_down_since = settings.get("network_down_since") or None
+
     def network_events(self, report: CycleReport) -> list[ev.Event]:
+        """Sync (DB): the start is stored, so the restore alert survives a panel restart."""
         if report.network_down and self.network_down_since is None:
+            settings.set("network_down_since", report.started_at, True)
             self.network_down_since = report.started_at
             return [ev.Event(ev.NETWORK_DOWN, report.started_at, data={"servers": report.checked})]
         if not report.network_down and self.network_down_since is not None and report.records:
+            settings.set("network_down_since", 0, True)
             since, self.network_down_since = self.network_down_since, None
             return [ev.Event(ev.NETWORK_UP, report.started_at,
                              data={"started_at": since, "duration": report.started_at - since})]
@@ -59,7 +67,7 @@ class Monitor:
         for r in records:
             self.live.add(r.server_id, LivePoint(r.checked_at, r.status, r.latency_ms, r.error_type))
         events = await run_db(self.incidents.process, records)
-        events += self.network_events(report)
+        events += await run_db(self.network_events, report)
         self.stats.invalidate()
         for event in events:
             try:

@@ -49,12 +49,14 @@ def build_batches(rows: list[TelegramOutbox], now: int) -> list[Batch]:
     if len(rows) <= MERGE_THRESHOLD:
         return [Batch(r.text + messages.delay_note(r.created_at, now), [r.id],
                       {r.exclude_server_id} if r.exclude_server_id else set()) for r in rows]
-    header = messages.merged_header(len(rows))
+    late = bool(messages.delay_note(min(r.created_at for r in rows), now))
+    header = messages.merged_header(len(rows), late)
     chunks = messages.split_indexed([r.text for r in rows], header, messages.SEPARATOR)
     batches = []
     for text, indexes in chunks:
         included = [rows[i] for i in indexes]
-        batches.append(Batch(text, [r.id for r in included],
+        note = messages.delay_note(min(r.created_at for r in included), now, "Oldest message delivered")
+        batches.append(Batch(text + note, [r.id for r in included],
                              {r.exclude_server_id for r in included if r.exclude_server_id}))
     return batches
 
@@ -71,8 +73,15 @@ def enqueue_rows(event_type: str, text: str, at: int, chat_ids: list[str],
 
 
 def due_rows(now: int) -> list[TelegramOutbox]:
+    """Every pending row of each chat that has a due row, oldest first.
+
+    A row still in backoff goes out with a newer due row, so an old alert is
+    never delivered after the messages that followed it.
+    """
+    due_chats = (TelegramOutbox.select(TelegramOutbox.chat_id)
+                 .where(TelegramOutbox.status == "pending", TelegramOutbox.next_attempt_at <= now))
     return list(TelegramOutbox.select()
-                .where(TelegramOutbox.status == "pending", TelegramOutbox.next_attempt_at <= now)
+                .where(TelegramOutbox.status == "pending", TelegramOutbox.chat_id.in_(due_chats))
                 .order_by(TelegramOutbox.created_at, TelegramOutbox.id).limit(500))
 
 

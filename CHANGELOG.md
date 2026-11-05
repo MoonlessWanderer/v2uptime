@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.4.5
+
+- The monitor network restore alert still arrives when the panel restarts during an outage, with the real start time. The down alert is not repeated.
+- An old alert waiting in the Telegram queue goes out before newer messages in the same chat, instead of arriving last.
+- A summary is called delayed only when it is, and it says how late its oldest message is.
+- An Xray exit with code 0 is reported as stopped, not crashed. The line under the alert is labeled as the last log line.
+
 ## 1.4.4
 
 - The admin server table fits at 1280px. Row actions are icons, the grip moves a row with the arrow keys, and the checkbox, grip, and name stay visible while the rest of the table scrolls.

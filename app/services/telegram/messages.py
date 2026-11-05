@@ -134,11 +134,16 @@ def network_up(started_at: int, ended_at: int) -> str:
 
 
 def xray_crash(at: int, code: int | None, detail: str) -> str:
-    text = (f"⚙️ <b>Xray crashed</b>\n"
-            f"The Xray process exited (code {e(code)}) and is restarting.\n"
-            f"{t(at)}")
+    if code == 0:
+        text = (f"⚙️ <b>Xray stopped</b>\n"
+                f"The Xray process exited normally (code 0), but the panel did not stop it. It is restarting.\n"
+                f"{t(at)}")
+    else:
+        text = (f"⚙️ <b>Xray crashed</b>\n"
+                f"The Xray process exited (code {e(code)}) and is restarting.\n"
+                f"{t(at)}")
     if detail:
-        text += f"\n<code>{e(detail[:300])}</code>"
+        text += f"\nLast log line:\n<code>{e(detail[:300])}</code>"
     return text
 
 
@@ -169,10 +174,10 @@ def test_message(at: int, via: str) -> str:
     return "\n".join(lines)
 
 
-def delay_note(created_at: int, now: int) -> str:
+def delay_note(created_at: int, now: int, label: str = "Delivered") -> str:
     if now - created_at < 120:
         return ""
-    return f"\n\n<i>Delivered {fmt_duration(now - created_at)} late.</i>"
+    return f"\n\n<i>{label} {fmt_duration(now - created_at)} late.</i>"
 
 
 # ---------------------------------------------------------------- reports
@@ -241,5 +246,6 @@ def help_text() -> str:
             "/incidents — the 10 most recent incidents")
 
 
-def merged_header(count: int) -> str:
-    return f"📦 <b>Summary of {count} delayed messages</b>\n\n"
+def merged_header(count: int, late: bool = False) -> str:
+    kind = "delayed messages" if late else "messages"
+    return f"📦 <b>Summary of {count} {kind}</b>\n\n"

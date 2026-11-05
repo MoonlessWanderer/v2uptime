@@ -164,6 +164,58 @@ def test_more_than_ten_messages_are_merged(tg):
     assert TelegramOutbox.select().where(TelegramOutbox.status == "sent").count() == 12
 
 
+def test_fresh_summary_is_not_called_delayed():
+    rows = [TelegramOutbox(id=i, text=f"event {i}", created_at=1000, exclude_server_id=None) for i in range(11)]
+    [batch] = build_batches(rows, now=1060)
+    assert "Summary of 11 messages" in batch.text
+    assert "delayed" not in batch.text and "late" not in batch.text
+
+
+def test_late_summary_says_how_late_its_oldest_message_is():
+    rows = [TelegramOutbox(id=i, text=f"event {i}", created_at=1000 + i, exclude_server_id=None) for i in range(11)]
+    [batch] = build_batches(rows, now=1000 + 8 * 3600)
+    assert "Summary of 11 delayed messages" in batch.text
+    assert batch.text.endswith("<i>Oldest message delivered 8h late.</i>")
+
+
+def test_old_alert_in_backoff_goes_out_before_a_newer_message(tg):
+    sender, fake, _ = sender_with({})
+    worker = OutboxWorker(sender)
+    enqueue_rows("network_down", "old alert", 1000, ["111"])
+    TelegramOutbox.update(attempts=50, next_attempt_at=9600).execute()
+    enqueue_rows("panel_started", "new message", 9000, ["111"])
+    assert run(worker.process_once(now=9001)) == 2
+    texts = [json.loads(request[1].read())["text"] for request in fake.requests]
+    assert texts[0].startswith("old alert") and "late" in texts[0]
+    assert texts[1] == "new message"
+
+
+def test_backoff_still_waits_when_nothing_else_is_due(tg):
+    sender, fake, _ = sender_with({})
+    worker = OutboxWorker(sender)
+    enqueue_rows("network_down", "old alert", 1000, ["111"])
+    TelegramOutbox.update(next_attempt_at=9600).execute()
+    assert run(worker.process_once(now=9001)) == 0
+    assert fake.requests == []
+
+
+def test_a_due_row_does_not_pull_another_chats_backoff(tg):
+    sender, fake, _ = sender_with({})
+    worker = OutboxWorker(sender)
+    enqueue_rows("down", "other chat", 1000, ["222"])
+    TelegramOutbox.update(next_attempt_at=9600).execute()
+    enqueue_rows("down", "this chat", 9000, ["111"])
+    assert run(worker.process_once(now=9001)) == 1
+    assert json.loads(fake.requests[0][1].read())["text"] == "this chat"
+
+
+def test_exit_code_zero_is_not_called_a_crash(database):
+    stopped = messages.xray_crash(1_700_000_000, 0, "a log line")
+    assert "Xray stopped" in stopped and "crashed" not in stopped
+    assert "Last log line:" in stopped and "a log line" in stopped
+    assert "Xray crashed" in messages.xray_crash(1_700_000_000, 1, "")
+
+
 def test_merged_messages_respect_telegram_limit():
     rows = [TelegramOutbox(id=i, text=("x" * 900) + f" #{i}", created_at=0, exclude_server_id=None) for i in range(30)]
     batches = build_batches(rows, now=10)

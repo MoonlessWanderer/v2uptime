@@ -53,6 +53,7 @@ class Services:
     async def start(self, background: bool = True) -> None:
         self.started_at = now_ts()
         await run_db(self.incidents.restore)
+        await run_db(self.monitor.restore)
         self.live.seed(await run_db(seed_rows, now_ts() - RECENT_WINDOW))
         if not background:
             return
