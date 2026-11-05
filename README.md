@@ -131,7 +131,7 @@ Open **Telegram** in the admin panel.
 
 `auto` tries a direct send with a 5 second connect timeout, then up to 4 online servers over local SOCKS (`socks5h`, so DNS goes through the tunnel). Order: preferred server, then highest stability score, then lowest latency. The last route that worked is tried first next time. The server an outage alert is about is not used to send that alert.
 
-Every alert is stored in `TelegramOutbox` first. Checks never wait on Telegram. If no route works, the row is retried with backoff from 30 seconds up to 10 minutes, and the message still shows the real event time. When a newer message is due, older waiting rows for that chat go first. More than 10 waiting messages for a chat are merged into a summary. Each message stays within 4096 characters. A 429 response honors `retry_after`. Rows that are not still pending are deleted after 7 days.
+Every alert is stored in `TelegramOutbox` first. Checks never wait on Telegram. If no route works, the row is retried with backoff from 30 seconds up to 10 minutes, and the message still shows the real event time. When a newer message is due, older waiting rows for that chat go first, except alerts that must avoid a server, which keep their own retry time. More than 10 waiting messages for a chat are merged into a summary. Each message stays within 4096 characters. A 429 response honors `retry_after`. Rows that are not still pending are deleted after 7 days.
 
 A down alert looks like this:
 

@@ -76,12 +76,15 @@ def due_rows(now: int) -> list[TelegramOutbox]:
     """Every pending row of each chat that has a due row, oldest first.
 
     A row still in backoff goes out with a newer due row, so an old alert is
-    never delivered after the messages that followed it.
+    not delivered after the messages that followed it. A row that excludes a
+    server keeps its own schedule: that server may be the only working route,
+    and the failed send would hold back the newer rows behind it.
     """
     due_chats = (TelegramOutbox.select(TelegramOutbox.chat_id)
                  .where(TelegramOutbox.status == "pending", TelegramOutbox.next_attempt_at <= now))
     return list(TelegramOutbox.select()
-                .where(TelegramOutbox.status == "pending", TelegramOutbox.chat_id.in_(due_chats))
+                .where(TelegramOutbox.status == "pending", TelegramOutbox.chat_id.in_(due_chats),
+                       (TelegramOutbox.next_attempt_at <= now) | TelegramOutbox.exclude_server_id.is_null())
                 .order_by(TelegramOutbox.created_at, TelegramOutbox.id).limit(500))
 
 

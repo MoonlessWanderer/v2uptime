@@ -209,6 +209,18 @@ def test_a_due_row_does_not_pull_another_chats_backoff(tg):
     assert json.loads(fake.requests[0][1].read())["text"] == "this chat"
 
 
+def test_alert_that_cannot_use_the_only_route_does_not_block_newer_messages(tg):
+    sender, fake, _ = sender_with({"direct": "down"}, pool_ids=(1,))
+    worker = OutboxWorker(sender)
+    enqueue_rows("down", "server 1 is down", 1000, ["111"], exclude_server_id=1)
+    TelegramOutbox.update(next_attempt_at=9600).execute()
+    enqueue_rows("up", "server 1 is back", 9000, ["111"])
+    assert run(worker.process_once(now=9001)) == 1
+    sent = [json.loads(request.read())["text"] for route, request in fake.requests if route != "direct"]
+    assert sent == ["server 1 is back"]
+    assert TelegramOutbox.get(TelegramOutbox.exclude_server_id == 1).status == "pending"
+
+
 def test_exit_code_zero_is_not_called_a_crash(database):
     stopped = messages.xray_crash(1_700_000_000, 0, "a log line")
     assert "Xray stopped" in stopped and "crashed" not in stopped
