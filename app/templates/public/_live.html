@@ -1,0 +1,4 @@
+{#- Live parts of the public page, as returned by /partials/live. index.html places the same two
+    includes around the sort tabs; public.js swaps each part on its own every 60 seconds. -#}
+<div id="live-summary">{% include "public/_summary.html" %}</div>
+<div id="live-list">{% include "public/_list.html" %}</div>

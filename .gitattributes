@@ -1,0 +1,5 @@
+# Keep LF everywhere: install.sh and the Python sources run on Linux servers.
+* text=auto eol=lf
+*.jpg binary
+*.png binary
+*.woff2 binary

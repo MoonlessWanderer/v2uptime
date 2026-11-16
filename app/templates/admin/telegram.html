@@ -1,0 +1,57 @@
+{% extends "admin/base.html" %}
+{% from "admin/_fields.html" import field %}
+{% block page_title %}Telegram{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Telegram</h1></div>
+{% include "admin/_tabs.html" %}
+
+<div class="grid-2">
+  <form method="post" action="{{ admin_url('/telegram') }}" class="panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf }}">
+    <h2>Telegram</h2>
+    <div class="form-grid single">
+      {% for d in telegram_main %}{{ field(d, values[d.key], masked_token if d.key == 'telegram_token' else '', servers) }}{% endfor %}
+    </div>
+    {% if telegram_adv %}
+    <details class="advanced">
+      <summary>Advanced settings</summary>
+      <div class="form-grid single">
+        {% for d in telegram_adv %}{{ field(d, values[d.key], '', servers) }}{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    <p class="help muted">Down and up thresholds are the N and M values on the Settings page. Automatic mode tries a direct send (5 seconds), then up to 4 online servers.</p>
+    <div class="form-actions"><button class="btn btn-primary" type="submit">Save</button></div>
+  </form>
+
+  <div>
+    <section class="panel">
+      <h2>Send a test message</h2>
+      <p class="muted">The message is sent immediately (not queued) to every chat ID, and the route is shown here. Save the settings first.</p>
+      <button type="button" class="btn" id="telegram-test" data-url="{{ admin_url('/telegram/test') }}"><svg class="ic"><use href="#i-send"/></svg>Send test message</button>
+      <div id="telegram-test-result" style="margin-top:12px"></div>
+    </section>
+    <section class="panel">
+      <h2>Queue</h2>
+      <dl class="kv">
+        <dt>Queued</dt><dd>{{ queue.pending }}{% if queue.oldest_pending %} (oldest: {{ queue.oldest_pending|time_tag("ago") }}){% endif %}</dd>
+        <dt>Sent, 24h</dt><dd>{{ queue.sent_24h }}</dd>
+        <dt>Permanently failed</dt><dd>{{ queue.failed }}</dd>
+        <dt>Last sent</dt><dd>{{ queue.last_sent_at|time_tag("datetime") }}{% if queue.last_via %} · <bdi>{{ queue.last_via }}</bdi>{% endif %}</dd>
+        <dt>Last error</dt><dd>{{ queue.last_error or '—' }}</dd>
+        <dt>Cached route</dt><dd class="ltr"><bdi>{{ last_route or '—' }}</bdi></dd>
+        {% if bot_error %}<dt>Command error</dt><dd>{{ bot_error }}</dd>{% endif %}
+      </dl>
+    </section>
+    <section class="panel">
+      <h2>Bot commands</h2>
+      <ul class="muted">
+        <li><code>/status</code> live status of every server</li>
+        <li><code>/report</code> report for the last 24 hours</li>
+        <li><code>/incidents</code> the 10 most recent incidents</li>
+      </ul>
+      <p class="help muted">Only registered chat IDs get a reply.</p>
+    </section>
+  </div>
+</div>
+{% endblock %}

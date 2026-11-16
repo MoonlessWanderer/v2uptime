@@ -1,0 +1,8 @@
+{#- Screen-reader summary. Visually hidden; #live-summary is aria-live and public.js swaps it only when the text changes. -#}
+{% set down = data.summary.offline %}
+{% set degraded = data.summary.degraded %}
+{% set online = data.servers|selectattr('status', 'equalto', 'online')|rejectattr('collecting')|list|length %}
+{% set total = data.summary.total %}
+{% if total %}
+<p class="sr-only">{{ summary_sentence(total, online, down, degraded) }}</p>
+{% endif %}

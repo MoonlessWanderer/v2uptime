@@ -1,0 +1,97 @@
+# Builds fully offline install archives (source + pip wheels + Xray + font) for every release.
+#   sudo bash install.sh --from-archive v2uptime-<tag>-linux-amd64.tar.gz
+name: offline-archives
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            machine: x86_64
+            xray: Xray-linux-64.zip
+          - arch: arm64
+            machine: aarch64
+            xray: Xray-linux-arm64-v8a.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run tests
+        if: matrix.arch == 'amd64'
+        run: |
+          pip install -r requirements-dev.txt
+          pytest
+
+      - name: Prepare tree
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME:-dev}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          mkdir -p build/v2uptime
+          git archive --format=tar HEAD | tar -x -C build/v2uptime
+          rm -rf build/v2uptime/.github build/v2uptime/.claude
+
+      - name: Download wheels (CPython 3.10 – 3.13)
+        run: |
+          set -euo pipefail
+          for py in 3.10 3.11 3.12 3.13; do
+            pip download -r requirements.txt -d build/v2uptime/wheels \
+              --only-binary=:all: --implementation cp --python-version "$py" \
+              --platform "manylinux2014_${{ matrix.machine }}" \
+              --platform "manylinux_2_17_${{ matrix.machine }}" \
+              --platform "manylinux_2_28_${{ matrix.machine }}"
+          done
+          ls build/v2uptime/wheels | wc -l
+
+      - name: Download Xray and verify checksum
+        run: |
+          set -euo pipefail
+          mkdir -p build/v2uptime/xray
+          base="https://github.com/XTLS/Xray-core/releases/latest/download/${{ matrix.xray }}"
+          curl -fsSL -o "build/v2uptime/xray/${{ matrix.xray }}" "$base"
+          curl -fsSL -o dgst "$base.dgst"
+          expected="$(awk -F'= ' '/^SHA2-256/ {print $2}' dgst | tr -d '[:space:]')"
+          echo "$expected  build/v2uptime/xray/${{ matrix.xray }}" | sha256sum -c -
+
+      - name: Download Vazirmatn font
+        run: |
+          set -euo pipefail
+          mkdir -p build/v2uptime/app/static/fonts
+          curl -fsSL -o build/v2uptime/app/static/fonts/Vazirmatn-Variable.woff2 \
+            "https://raw.githubusercontent.com/rastikerdar/vazirmatn/v33.003/fonts/webfonts/Vazirmatn%5Bwght%5D.woff2"
+
+      - name: Pack
+        run: |
+          set -euo pipefail
+          name="v2uptime-${TAG}-linux-${{ matrix.arch }}.tar.gz"
+          tar -czf "$name" -C build v2uptime
+          sha256sum "$name" > "$name.sha256"
+          echo "ARCHIVE=$name" >> "$GITHUB_ENV"
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
+
+      - name: Upload artifact (manual runs)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: |
+            ${{ env.ARCHIVE }}
+            ${{ env.ARCHIVE }}.sha256

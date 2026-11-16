@@ -1,0 +1,80 @@
+{% extends "admin/base.html" %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Dashboard</h1><a class="btn" href="{{ admin_url('/servers') }}"><svg class="ic"><use href="#i-plus"/></svg>Add servers</a></div>
+
+{% if network_down %}
+<div class="alert alert-error">The monitor's internet has been down since {{ network_down|time_tag("datetime") }}. Checks in this window are excluded from uptime.</div>
+{% endif %}
+{% if not xray.installed %}
+<div class="alert alert-error">Xray binary not found (<code>{{ xray.binary }}</code>). From the <code>v2uptime</code> menu, choose “Update Xray core”.</div>
+{% elif not xray.ready %}
+<div class="alert alert-warn">Xray is not running ({{ xray.state }}). {{ xray.last_error or '' }}</div>
+{% endif %}
+
+<div class="kpis">
+  <div class="stat stat-online"><svg class="ic"><use href="#i-check"/></svg><div><span class="stat-value">{{ counts.online }}</span><span class="stat-label">Online</span></div></div>
+  <div class="stat stat-degraded"><svg class="ic"><use href="#i-alert"/></svg><div><span class="stat-value">{{ counts.degraded }}</span><span class="stat-label">Degraded</span></div></div>
+  <div class="stat stat-offline"><svg class="ic"><use href="#i-x"/></svg><div><span class="stat-value">{{ counts.offline }}</span><span class="stat-label">Down</span></div></div>
+  <div class="stat stat-uptime"><svg class="ic"><use href="#i-server"/></svg><div><span class="stat-value">{{ total }}</span><span class="stat-label">Active servers ({{ counts.unknown }} unknown)</span></div></div>
+</div>
+
+<div class="grid-2">
+  <section class="panel">
+    <div class="panel-head"><h2>Servers with problems</h2></div>
+    {% if problem %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Server</th><th>Status</th><th>Since</th><th>Last error</th></tr></thead>
+      <tbody>
+      {% for p in problem %}
+        <tr>
+          <td><a href="{{ admin_url('/servers/' ~ p.id) }}"><bdi>{{ p.name }}</bdi></a></td>
+          <td><span class="status-dot {{ p.status }}"></span>{{ p.status|status_label }}</td>
+          <td>{{ p.since|time_tag("datetime") }}</td>
+          <td>{{ p.error|error_label if p.error else '—' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="muted">All servers are healthy.</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <p class="status-line">Xray: {% if xray.ready %}<span class="status-dot online"></span>Running{% elif not xray.installed %}<span class="status-dot"></span>Not installed{% else %}<span class="status-dot offline"></span>{{ xray.state }}{% endif %}{% if xray.version %} · {{ xray.version }}{% endif %}{% if xray.started_at %} · up {{ (now - xray.started_at)|duration }}{% endif %}</p>
+    <details>
+      <summary>Details</summary>
+      <dl class="kv">
+        <dt>PID / epoch</dt><dd class="ltr">{{ xray.pid or '—' }} / {{ xray.epoch }}</dd>
+        <dt>Restarts / crashes</dt><dd>{{ xray.restarts }} / {{ xray.crashes }}</dd>
+        <dt>Loaded servers</dt><dd>{{ xray.loaded }}</dd>
+        {% if report %}
+        {% set skip_labels = {"xray_missing": "Xray is not installed", "xray_not_ready": "Xray was not ready", "no_servers": "No servers to test"} %}
+        <dt>Last cycle</dt><dd>{{ report.started_at|time_tag("datetime") }} ·
+          {% if report.skipped_reason %}Skipped: {{ skip_labels.get(report.skipped_reason, report.skipped_reason) }}
+          {% else %}{{ '%.1f'|format(report.duration) }}s · {{ report.ok }} ok / {{ report.fail }} failed / {{ report.unknown }} unknown{% if report.discarded %} · discarded{% endif %}{% endif %}</dd>
+        {% endif %}
+      </dl>
+      {% if xray_log %}<pre class="log-box">{{ xray_log|join('\n') }}</pre>{% endif %}
+    </details>
+  </section>
+
+  <section class="panel">
+    <p class="status-line">{% if telegram_enabled %}Telegram: <span class="status-dot online"></span>Enabled · Queue: {{ queue.pending }} · Last sent: {{ queue.last_sent_at|time_tag("ago") }}{% else %}Telegram: Disabled{% endif %}</p>
+    {% if queue.last_error or bot_error %}<p class="muted">{{ queue.last_error or bot_error }}</p>{% endif %}
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Recent incidents</h2><a class="btn btn-sm" href="{{ admin_url('/incidents') }}">All</a></div>
+    {% if recent %}
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Server</th><th>Started</th><th>Duration</th><th>Cause</th></tr></thead>
+      <tbody>{% for i in recent %}
+        <tr><td><bdi>{{ i.server.name }}</bdi></td><td>{{ i.started_at|time_tag("datetime") }}</td>
+          <td>{% if i.ended_at %}{{ i.duration_seconds|duration }}{% else %}<span class="pill pill-bad">Ongoing</span>{% endif %}</td>
+          <td>{{ i.error_type|error_label }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<p class="muted">No incidents recorded.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}
